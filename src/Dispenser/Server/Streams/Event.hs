@@ -9,7 +9,7 @@ module Dispenser.Server.Streams.Event
 import Dispenser.Server.Prelude
 
 import Dispenser.Server.Partition       ( currentEventNumber )
-import Dispenser.Server.Streams.Batched ( rangeStream )
+import Dispenser.Server.Streams.Batched ( pgRangeStream )
 import Dispenser.Server.Types
 import Streaming
 
@@ -22,4 +22,4 @@ currentStreamFrom :: forall m a. (EventData a, MonadIO m)
                   -> m (Stream (Of (Event a)) m ())
 currentStreamFrom minEvent batchSize conn = do
   endNum <- liftIO (currentEventNumber conn)
-  rangeStream (minEvent, endNum) batchSize conn
+  pgRangeStream (minEvent, endNum) batchSize conn

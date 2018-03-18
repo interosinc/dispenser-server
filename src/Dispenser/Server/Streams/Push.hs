@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell   #-}
 
 module Dispenser.Server.Streams.Push
-     ( fromNow
+     ( pgFromNow
      ) where
 
 import           Dispenser.Server.Prelude
@@ -47,9 +47,9 @@ instance FromJSON a => FromJSON (PushEvent a) where
         Just x  -> parseJSON x
         Nothing -> fail $ "no '" <> unpack s <> "' field"
 
-fromNow :: (EventData a, MonadIO m)
+pgFromNow :: (EventData a, MonadIO m)
         => PGConnection -> m (Stream (Of (Event a)) m r)
-fromNow partConn = do
+pgFromNow partConn = do
   -- TODO: This will leak connections if an exception occurs.
   --       conn should be destroyed or returned
   (conn, _) <- liftIO $ takeResource (partConn ^. pool)

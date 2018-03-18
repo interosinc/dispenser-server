@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Dispenser.Server.Streams.Batched
-  ( rangeStream
+  ( pgRangeStream
   ) where
 
 import           Dispenser.Server.Prelude
@@ -18,10 +18,10 @@ import           Streaming
 -- maxNum if they all already exist.  if they don't you get whatever portion
 -- does, including potentially just an empty stream if none of the range exists
 -- yet.
-rangeStream :: forall m a. (EventData a, MonadIO m)
+pgRangeStream :: forall m a. (EventData a, MonadIO m)
             => (EventNumber, EventNumber) -> BatchSize -> PGConnection
             -> m (Stream (Of (Event a)) m ())
-rangeStream (minNum, maxNum) batchSize conn = do
+pgRangeStream (minNum, maxNum) batchSize conn = do
   batch :: Batch (Event a) <- liftIO $ wait =<< pgReadBatchFrom minNum batchSize conn
   let events      = unBatch batch
       batchStream = S.each events
@@ -29,5 +29,5 @@ rangeStream (minNum, maxNum) batchSize conn = do
     then return $ S.takeWhile ((<= maxNum) . view eventNumber) batchStream
     else do
       let minNum' = succ . maximum . map (view eventNumber) $ events
-      nextStream <- rangeStream (minNum', maxNum) batchSize conn
+      nextStream <- pgRangeStream (minNum', maxNum) batchSize conn
       return $ batchStream >>= const nextStream

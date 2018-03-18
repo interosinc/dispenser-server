@@ -34,12 +34,12 @@ fromEventNumber eventNum batchSize conn = do
     where
       maxHandOffDelta = 50 -- TODO
 
-      catchup en = join . lift $ fromNow conn >>= chaseFrom en
+      catchup en = join . lift $ pgFromNow conn >>= chaseFrom en
 
       chaseFrom startNum stream = S.next stream >>= \case
         Left _ -> return stream
         Right (pivotEvent, stream') -> do
-          missingStream <- rangeStream (startNum, endNum) batchSize conn
+          missingStream <- pgRangeStream (startNum, endNum) batchSize conn
           return $ missingStream >>= const (S.yield pivotEvent) >>= const stream'
           where
             endNum = pred $ pivotEvent ^. eventNumber
