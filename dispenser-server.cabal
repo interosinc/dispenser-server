@@ -1,0 +1,115 @@
+name:                dispenser-server
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/superpowerscorp/dispenser-server#readme
+license:             AllRightsReserved
+license-file:        LICENSE
+author:              Superpowers Corp
+maintainer:          john@superpowerscorp.com
+copyright:           2018 Superpowers Corp
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  ghc-options:         -Wall
+  exposed-modules:     Dispenser.Server
+                     , Dispenser.Server.Aggregates
+                     , Dispenser.Server.Aggregates.Partition
+                     , Dispenser.Server.Aggregates.PartitionDemo
+                     , Dispenser.Server.Aggregates.ZMQ
+                     , Dispenser.Server.Db
+                     , Dispenser.Server.Main
+                     , Dispenser.Server.Orphans
+                     , Dispenser.Server.Partition
+                     , Dispenser.Server.Prelude
+                     , Dispenser.Server.Primitives
+                     , Dispenser.Server.Streams.Batched
+                     , Dispenser.Server.Streams.Catchup
+                     , Dispenser.Server.Streams.Event
+                     , Dispenser.Server.Streams.Push
+                     , Dispenser.Server.Streams.Resumable
+                     , Dispenser.Server.Types
+  build-depends:       aeson
+                     , base  >= 4.7 && < 5
+                     , bytestring
+                     , containers
+                     , data-default
+                     , dispenser-core
+                     , focus-prelude
+                     , foldl
+                     , lens
+                     , monad-control
+                     , postgresql-simple
+                     , random
+                     , resource-pool
+                     , stm
+                     , streaming
+                     , text
+                     , time
+                     , unordered-containers
+                     -- TODO: move to separate zeromq "sidecar" lib
+                     , zeromq4-haskell
+  default-language:    Haskell2010
+
+executable dispenser-server
+  hs-source-dirs:   app
+  main-is:          Main.hs
+  ghc-options:      -Wall -threaded -rtsopts -with-rtsopts=-N
+  build-depends:    aeson
+                  , base
+                  , bytestring
+                  , containers
+                  , data-default
+                  , dispenser-core
+                  , dispenser-server
+                  , focus-prelude
+                  , foldl
+                  , lens
+                  , monad-control
+                  , postgresql-simple
+                  , random
+                  , resource-pool
+                  , stm
+                  , streaming
+                  , text
+                  , time
+                  , unordered-containers
+                  , zeromq4-haskell
+  default-language: Haskell2010
+
+test-suite dispenser-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       QuickCheck
+                     , aeson
+                     , base
+                     , bytestring
+                     , containers
+                     , data-default
+                     , dispenser-core
+                     , dispenser-server
+                     , focus-prelude
+                     , foldl
+                     , hspec
+                     , lens
+                     , monad-control
+                     , postgresql-simple
+                     , random
+                     , resource-pool
+                     , stm
+                     , streaming
+                     , text
+                     , time
+                     , unordered-containers
+                     , zeromq4-haskell
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/superpowerscorp/dispenser-server
