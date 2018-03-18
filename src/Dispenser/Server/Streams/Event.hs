@@ -14,11 +14,11 @@ import Dispenser.Server.Types
 import Streaming
 
 currentStream :: forall m a. (EventData a, MonadIO m)
-              => BatchSize -> PartitionConnection -> m (Stream (Of (Event a)) m ())
+              => BatchSize -> PGConnection -> m (Stream (Of (Event a)) m ())
 currentStream = currentStreamFrom (EventNumber 0)
 
 currentStreamFrom :: forall m a. (EventData a, MonadIO m)
-                  => EventNumber -> BatchSize -> PartitionConnection
+                  => EventNumber -> BatchSize -> PGConnection
                   -> m (Stream (Of (Event a)) m ())
 currentStreamFrom minEvent batchSize conn = do
   endNum <- liftIO (currentEventNumber conn)

@@ -28,8 +28,8 @@ instance ToJSON Account
 
 demo1 :: IO ()
 demo1 = do
-  conn <- Partition.connect partition' (PoolSize 5)
-  _src  <- connect conn
+  conn <- Partition.pgConnect partition' (PoolSize 5)
+  _src  <- connectAgg conn
   -- aggregate (AggregateId "users/123/account") src >>= \case
   --   Left err  -> putLn $ "error acquiring aggregate: " <> show err
   --   Right (agg :: Aggregate Account) -> do
@@ -39,6 +39,6 @@ demo1 = do
 
   notImplemented "demo1"
   where
-    partition' = Partition (DatabaseURL url) (TableName tableName')
-    url        = "postgres://dispenser@localhost:5432/dispenser"
-    tableName' = "agg_demo_1"
+    partition'     = Partition (DatabaseURL url) (PartitionName partitionName')
+    url            = "postgres://dispenser@localhost:5432/dispenser"
+    partitionName' = "agg_demo_1"

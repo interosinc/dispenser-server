@@ -4,7 +4,7 @@
 
 module Dispenser.Server.Types
      ( module Exports
-     , PartitionConnection( PartitionConnection )
+     , PGConnection( PGConnection )
      , connectedPartition
      , pool
      ) where
@@ -13,12 +13,12 @@ import Dispenser.Server.Prelude
 
 import Dispenser.Types          as Exports
 
-data PartitionConnection = PartitionConnection
+data PGConnection = PGConnection
   { _connectedPartition :: Partition
   , _pool               :: Pool Connection
   } deriving (Generic)
 
-makeClassy ''PartitionConnection
+makeClassy ''PGConnection
 
-instance HasPartition PartitionConnection where
+instance HasPartition PGConnection where
   partition = connectedPartition

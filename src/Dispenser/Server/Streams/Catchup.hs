@@ -18,7 +18,7 @@ import           Dispenser.Server.Types
 import           Streaming
 
 fromEventNumber :: forall m a r. (EventData a, MonadIO m)
-                => EventNumber -> BatchSize -> PartitionConnection
+                => EventNumber -> BatchSize -> PGConnection
                 -> m (Stream (Of (Event a)) m r)
 fromEventNumber eventNum batchSize conn = do
   clstream <- S.store S.last <$> currentStreamFrom eventNum batchSize conn
@@ -45,6 +45,6 @@ fromEventNumber eventNum batchSize conn = do
             endNum = pred $ pivotEvent ^. eventNumber
 
 fromZero :: (EventData a, MonadIO m)
-         => BatchSize -> PartitionConnection
+         => BatchSize -> PGConnection
          -> m (Stream (Of (Event a)) m r)
 fromZero = fromEventNumber (EventNumber 0)

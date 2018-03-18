@@ -2,12 +2,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Dispenser.Server.Partition
-     ( connect
+     ( pgConnect
      , create
      , currentEventNumber
      , drop
      , recreate
-     , tableNameToChannelName
+     , partitionNameToChannelName
      ) where
 
 import Dispenser.Server.Prelude   hiding ( drop )
@@ -20,22 +20,22 @@ import Dispenser.Server.Db               ( poolFromUrl
                                          )
 import Dispenser.Server.Types
 
-connect :: Partition -> PoolSize -> IO PartitionConnection
-connect part (PoolSize size) =
-  PartitionConnection part <$> poolFromUrl (part ^. dbUrl) (fromIntegral size)
+pgConnect :: Partition -> PoolSize -> IO PGConnection
+pgConnect part (PoolSize size) =
+  PGConnection part <$> poolFromUrl (part ^. dbUrl) (fromIntegral size)
 
-create :: PartitionConnection -> IO ()
-create partConn = withResource (partConn ^. pool) $ \conn -> do
+create :: PGConnection -> IO ()
+create conn = withResource (conn ^. pool) $ \dbConn -> do
   -- TODO: tx
-  createTable conn
-  createStreamTriggerFn conn
-  createStreamTrigger conn
-  createIndexes conn
+  createTable           dbConn
+  createStreamTriggerFn dbConn
+  createStreamTrigger   dbConn
+  createIndexes         dbConn
   where
-    table = unTableName $ partConn ^. tableName
+    table = unPartitionName $ conn ^. partitionName
 
     createTable :: Connection -> IO ()
-    createTable conn = runSQL conn $
+    createTable dbConn = runSQL dbConn $
       "CREATE TABLE " <> table
       <> " ( event_number BIGSERIAL PRIMARY KEY"
       <> " , stream_names TEXT[]"
@@ -47,7 +47,7 @@ create partConn = withResource (partConn ^. pool) $ \conn -> do
     createIndexes _conn = return () -- TODO: createIndexes
 
     createStreamTriggerFn :: Connection -> IO ()
-    createStreamTriggerFn conn = runSQL conn $
+    createStreamTriggerFn dbConn = runSQL dbConn $
       "CREATE FUNCTION stream_" <> table <> "_events() RETURNS trigger AS $$\n"
       <> "BEGIN\n"
       <> "  PERFORM pg_notify('" <> channel <> "', (row_to_json(NEW) :: TEXT));\n"
@@ -55,34 +55,34 @@ create partConn = withResource (partConn ^. pool) $ \conn -> do
       <> "END\n"
       <> "$$ LANGUAGE plpgsql"
       where
-        channel = tableNameToChannelName table
+        channel = partitionNameToChannelName table
 
     createStreamTrigger :: Connection -> IO ()
-    createStreamTrigger conn = runSQL conn $
+    createStreamTrigger dbConn = runSQL dbConn $
       "CREATE TRIGGER " <> triggerName <> " AFTER INSERT ON " <> table
       <> " FOR EACH ROW EXECUTE PROCEDURE stream_" <> table <> "_events()"
       where
         triggerName = table <> "_stream_trig"
 
-currentEventNumber :: PartitionConnection -> IO EventNumber
+currentEventNumber :: PGConnection -> IO EventNumber
 currentEventNumber conn = withResource (conn ^. pool) $ \dbConn -> do
   [Only n] <- query_ dbConn q
   return $ EventNumber n
   where
     q = fromString . unpack $ "SELECT COALESCE(MAX(event_number), -1) FROM " <> tn
-    TableName tn = conn ^. tableName
+    PartitionName tn = conn ^. partitionName
 
-drop :: PartitionConnection -> IO ()
+drop :: PGConnection -> IO ()
 drop partConn = withResource (partConn ^. pool) $ \conn -> do
   runSQL conn $ "DROP TABLE IF EXISTS " <> table
   runSQL conn $ "DROP FUNCTION IF EXISTS stream_" <> table <> "_events() CASCADE"
   where
-    table = unTableName $ partConn ^. tableName
+    table = unPartitionName $ partConn ^. partitionName
 
-recreate :: PartitionConnection -> IO ()
+recreate :: PGConnection -> IO ()
 recreate conn = do
   drop conn
   create conn
 
-tableNameToChannelName :: Text -> Text
-tableNameToChannelName = (<> "_stream")
+partitionNameToChannelName :: Text -> Text
+partitionNameToChannelName = (<> "_stream")

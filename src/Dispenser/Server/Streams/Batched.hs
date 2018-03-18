@@ -19,10 +19,10 @@ import           Streaming
 -- does, including potentially just an empty stream if none of the range exists
 -- yet.
 rangeStream :: forall m a. (EventData a, MonadIO m)
-            => (EventNumber, EventNumber) -> BatchSize -> PartitionConnection
+            => (EventNumber, EventNumber) -> BatchSize -> PGConnection
             -> m (Stream (Of (Event a)) m ())
 rangeStream (minNum, maxNum) batchSize conn = do
-  batch :: Batch (Event a) <- liftIO $ wait =<< readBatchFrom minNum batchSize conn
+  batch :: Batch (Event a) <- liftIO $ wait =<< pgReadBatchFrom minNum batchSize conn
   let events      = unBatch batch
       batchStream = S.each events
   if any ((>= maxNum) . view eventNumber) events

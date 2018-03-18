@@ -4,9 +4,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Dispenser.Server.Primitives
-     ( appendEvents
-     , postEvent
-     , readBatchFrom
+     ( pgAppendEvents
+     , pgPostEvent
+     , pgReadBatchFrom
      ) where
 
 import           Dispenser.Server.Prelude
@@ -18,9 +18,10 @@ import           Dispenser.Server.Orphans         ()
 import           Dispenser.Server.Types
 
 -- TODO: `Foldable a` instead of `[a]`?
-appendEvents :: forall a. EventData a =>
-                PartitionConnection -> [StreamName] -> NonEmptyBatch a -> IO (Async EventNumber)
-appendEvents conn streamNames (NonEmptyBatch b) =
+pgAppendEvents :: forall a. EventData a
+               => [StreamName] -> NonEmptyBatch a -> PGConnection
+               -> IO (Async EventNumber)
+pgAppendEvents streamNames (NonEmptyBatch b) conn =
   async $ withResource (conn ^. pool) $ \dbConn ->
     List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
   where
@@ -29,20 +30,20 @@ appendEvents conn streamNames (NonEmptyBatch b) =
 
     q :: Query
     q = fromString . unpack
-          $ "INSERT INTO " <> unTableName (conn ^. tableName)
+          $ "INSERT INTO " <> unPartitionName (conn ^. partitionName)
          <> " (event_data, stream_names)"
          <> " VALUES (?, ?)"
          <> " RETURNING event_number"
 
-postEvent :: EventData a =>
-             PartitionConnection -> [StreamName] -> a -> IO (Async EventNumber)
-postEvent p sns e = appendEvents p sns (NonEmptyBatch $ e :| [])
+pgPostEvent :: EventData a
+          => [StreamName] -> a -> PGConnection -> IO (Async EventNumber)
+pgPostEvent sns e conn = pgAppendEvents sns (NonEmptyBatch $ e :| []) conn
 
 -- Right now there is no limit on batch size... so obviously we should uh... do
 -- something about that.
-readBatchFrom :: ( EventData a ) =>
-                 EventNumber -> BatchSize -> PartitionConnection -> IO (Async (Batch (Event a)))
-readBatchFrom (EventNumber n) (BatchSize sz) conn
+pgReadBatchFrom :: ( EventData a ) =>
+                 EventNumber -> BatchSize -> PGConnection -> IO (Async (Batch (Event a)))
+pgReadBatchFrom (EventNumber n) (BatchSize sz) conn
   | sz <= 0   = async (return $ Batch [])
   | otherwise = async $ withResource (conn ^. pool) $ \dbConn -> do
       batchValue :: Batch (Event Value) <- Batch <$> query dbConn q params
@@ -59,7 +60,7 @@ readBatchFrom (EventNumber n) (BatchSize sz) conn
     q :: Query
     q = fromString . unpack
           $ "SELECT event_number, stream_names, event_data, created_at"
-         <> " FROM " <> unTableName (conn ^. tableName)
+         <> " FROM " <> unPartitionName (conn ^. partitionName)
          <> " WHERE event_number >= ?"
          <> " ORDER BY event_number"
          <> " LIMIT ?"

@@ -6,7 +6,7 @@
 
 module Dispenser.Server.Aggregates.Partition
      ( PartitionAggregateSource
-     , connect
+     , connectAgg
      ) where
 
 import Dispenser.Server.Prelude
@@ -15,7 +15,7 @@ import Control.Concurrent.STM.TVar
 import Dispenser.Server.Aggregates
 import Dispenser.Server.Types
 
-newtype PartitionAggregateSource = PartitionAggregateSource PartitionConnection
+newtype PartitionAggregateSource = PartitionAggregateSource PGConnection
 newtype PartitionAggregate a = PartitionAggregate (TVar a)
 
 instance MonadIO m => Aggregate m (PartitionAggregate a) a where
@@ -35,5 +35,5 @@ instance MonadIO m =>
         agg = PartitionAggregate v
     return $ Right agg
 
-connect :: PartitionConnection -> IO PartitionAggregateSource
-connect = return . PartitionAggregateSource
+connectAgg :: PGConnection -> IO PartitionAggregateSource
+connectAgg = return . PartitionAggregateSource

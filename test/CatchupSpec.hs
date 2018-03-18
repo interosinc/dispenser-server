@@ -52,10 +52,10 @@ spec = describe "Catchup" $ do
     (1 :: Int) `shouldBe` 2
 
 
-postTestEvent :: Int -> PartitionConnection -> IO ()
+postTestEvent :: Int -> PGConnection -> IO ()
 postTestEvent = panic "postTestEvent not impl"
 
-createTestPartition :: IO PartitionConnection
+createTestPartition :: IO PGConnection
 createTestPartition = do
   partitionName :: Text <- ("test_disp_" <>) . show <$> randomRIO (0, maxBound :: Int)
   let partition = Partition dbUrl tableName

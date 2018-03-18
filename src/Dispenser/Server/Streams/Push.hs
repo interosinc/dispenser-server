@@ -48,7 +48,7 @@ instance FromJSON a => FromJSON (PushEvent a) where
         Nothing -> fail $ "no '" <> unpack s <> "' field"
 
 fromNow :: (EventData a, MonadIO m)
-        => PartitionConnection -> m (Stream (Of (Event a)) m r)
+        => PGConnection -> m (Stream (Of (Event a)) m r)
 fromNow partConn = do
   -- TODO: This will leak connections if an exception occurs.
   --       conn should be destroyed or returned
@@ -69,8 +69,8 @@ fromNow partConn = do
           S.yield e
   where
     channelBytes = encodeUtf8 channelText
-    channelText  = tableNameToChannelName . unTableName
-      $ partConn ^. tableName
+    channelText  = partitionNameToChannelName . unPartitionName
+      $ partConn ^. partitionName
 
 deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
 deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
