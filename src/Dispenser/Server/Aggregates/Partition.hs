@@ -13,7 +13,7 @@ import Dispenser.Server.Prelude
 
 import Control.Concurrent.STM.TVar
 import Dispenser.Server.Aggregates
-import Dispenser.Server.Types
+import Dispenser.Server.Partition
 
 newtype PartitionAggregateSource = PartitionAggregateSource PGConnection
 newtype PartitionAggregate a = PartitionAggregate (TVar a)

@@ -1,24 +1,89 @@
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Dispenser.Server.Partition
-     ( pgConnect
+     ( module Exports
+     , PGConnection
+     , connectedPartition
      , create
-     , currentEventNumber
      , drop
+     , pool
+     , pgConnect
+     , currentEventNumber
      , recreate
      , partitionNameToChannelName
      ) where
 
 import Dispenser.Server.Prelude   hiding ( drop )
-
+import Streaming
 import Data.String                       ( fromString )
 import Data.Text                         ( unpack )
 import Database.PostgreSQL.Simple        ( query_ )
 import Dispenser.Server.Db               ( poolFromUrl
                                          , runSQL
                                          )
-import Dispenser.Server.Types
+import Dispenser.Types          as Exports
+import qualified Data.List                as List
+import           Dispenser.Server.Orphans         ()
+import qualified Streaming.Prelude           as S
+
+data PGConnection = PGConnection
+  { _connectedPartition :: Partition
+  , _pool               :: Pool Connection
+  } deriving (Generic)
+
+makeClassy ''PGConnection
+
+instance HasPartition PGConnection where
+  partition = connectedPartition
+
+-- TODO: `Foldable a` instead of `[a]`?
+instance PartitionConnection PGConnection where
+  appendEvents :: (EventData a, MonadIO m)
+               => PGConnection -> [StreamName] -> NonEmptyBatch a
+               -> m (Async EventNumber)
+  appendEvents conn streamNames (NonEmptyBatch b) =
+    liftIO . async . withResource (conn ^. pool) $ \dbConn ->
+      List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
+    where
+      f :: Value -> (Value, [StreamName])
+      f v = (v, streamNames)
+
+      q :: Query
+      q = fromString . unpack
+            $ "INSERT INTO " <> unPartitionName (conn ^. partitionName)
+           <> " (event_data, stream_names)"
+           <> " VALUES (?, ?)"
+           <> " RETURNING event_number"
+
+  fromNow :: (EventData a, MonadIO m)
+          => [StreamName] -> PGConnection
+          -> m (Stream (Of (Event a)) m r)
+  fromNow _streamNames _conn = panic "disco 2"
+
+  rangeStream :: (EventData a, MonadIO m)
+              => BatchSize
+              -> [StreamName]
+              -> (EventNumber, EventNumber)
+              -> PGConnection
+              -> m (Stream (Of (Event a)) m ())
+  rangeStream batchSize streamNames (minNum, maxNum) conn = do
+    -- TODO: filter by stream names
+    batch :: Batch (Event a) <- liftIO $ wait =<< pgReadBatchFrom minNum batchSize conn
+    let events      = unBatch batch
+        batchStream = S.each events
+    if any ((>= maxNum) . view eventNumber) events
+      then return $ S.takeWhile ((<= maxNum) . view eventNumber) batchStream
+      else do
+        let minNum' = succ . fromMaybe (EventNumber (-1))
+              . maximumMay . map (view eventNumber) $ events
+        nextStream <- rangeStream batchSize streamNames (minNum', maxNum) conn
+        return $ batchStream >>= const nextStream
 
 pgConnect :: Partition -> PoolSize -> IO PGConnection
 pgConnect part (PoolSize size) =
@@ -86,3 +151,32 @@ recreate conn = do
 
 partitionNameToChannelName :: Text -> Text
 partitionNameToChannelName = (<> "_stream")
+
+-- Right now there is no limit on batch size... so obviously we should uh... do
+-- something about that.
+pgReadBatchFrom :: ( EventData a ) =>
+                 EventNumber -> BatchSize -> PGConnection -> IO (Async (Batch (Event a)))
+pgReadBatchFrom (EventNumber n) (BatchSize sz) conn
+  | sz <= 0   = async (return $ Batch [])
+  | otherwise = async $ withResource (conn ^. pool) $ \dbConn -> do
+      batchValue :: Batch (Event Value) <- Batch <$> query dbConn q params
+      return $ f batchValue
+  where
+    f :: EventData a => Batch (Event Value) -> Batch (Event a)
+    f = fmap (g . fromJSON <$>)
+
+    g :: Result a -> a
+    g = \case
+      Error e   -> panic $ "unexpected error deserializing result: " <> show e
+      Success x -> x
+
+    q :: Query
+    q = fromString . unpack
+          $ "SELECT event_number, stream_names, event_data, created_at"
+         <> " FROM " <> unPartitionName (conn ^. partitionName)
+         <> " WHERE event_number >= ?"
+         <> " ORDER BY event_number"
+         <> " LIMIT ?"
+
+    params :: (Int, Int)
+    params = bimap fromIntegral fromIntegral (n, sz)

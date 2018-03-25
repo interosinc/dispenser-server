@@ -18,7 +18,7 @@ import           Data.Text                             ( unlines
                                                        , unpack
                                                        )
 import           Dispenser.Server.Streams.Catchup
-import           Dispenser.Server.Types
+import           Dispenser.Server.Partition
 import           Streaming
 
 newtype OffsetName = OffsetName { unOffsetName :: Text }

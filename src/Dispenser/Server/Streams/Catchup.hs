@@ -11,17 +11,15 @@ import           Dispenser.Server.Prelude
 import qualified Streaming.Prelude                as S
 
 import           Dispenser.Server.Partition
-import           Dispenser.Server.Streams.Batched
 import           Dispenser.Server.Streams.Event
 import           Dispenser.Server.Streams.Push
-import           Dispenser.Server.Types
 import           Streaming
 
 fromEventNumber :: forall m a r. (EventData a, MonadIO m)
                 => EventNumber -> BatchSize -> PGConnection
                 -> m (Stream (Of (Event a)) m r)
 fromEventNumber eventNum batchSize conn = do
-  clstream <- S.store S.last <$> currentStreamFrom eventNum batchSize conn
+  clstream <- S.store S.last <$> currentStreamFrom eventNum batchSize streamNames conn
   return $ clstream >>= \case
     Nothing :> _ -> catchup (EventNumber 0)
     Just lastEvent :> _ -> do
@@ -34,12 +32,14 @@ fromEventNumber eventNum batchSize conn = do
     where
       maxHandOffDelta = 50 -- TODO
 
+      streamNames = [] -- TODO
+
       catchup en = join . lift $ pgFromNow conn >>= chaseFrom en
 
       chaseFrom startNum stream = S.next stream >>= \case
         Left _ -> return stream
         Right (pivotEvent, stream') -> do
-          missingStream <- pgRangeStream (startNum, endNum) batchSize conn
+          missingStream <- rangeStream batchSize streamNames (startNum, endNum) conn
           return $ missingStream >>= const (S.yield pivotEvent) >>= const stream'
           where
             endNum = pred $ pivotEvent ^. eventNumber

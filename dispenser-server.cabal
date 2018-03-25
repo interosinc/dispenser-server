@@ -26,8 +26,6 @@ library
                      , Dispenser.Server.Orphans
                      , Dispenser.Server.Partition
                      , Dispenser.Server.Prelude
-                     , Dispenser.Server.Primitives
-                     , Dispenser.Server.Streams.Batched
                      , Dispenser.Server.Streams.Catchup
                      , Dispenser.Server.Streams.Event
                      , Dispenser.Server.Streams.Push

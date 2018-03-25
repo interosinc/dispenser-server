@@ -20,7 +20,6 @@ import           Data.Text                                       ( pack
                                                                  )
 import           Database.PostgreSQL.Simple.Notification
 import           Dispenser.Server.Partition
-import           Dispenser.Server.Types
 import           Streaming
 
 newtype PushEvent a = PushEvent { unEvent :: Event a }
