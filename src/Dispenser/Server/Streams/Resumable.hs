@@ -45,8 +45,8 @@ createOffsetsTable conn = withResource (conn ^. pool) $ \dbConn ->
 resume :: (EventData a, MonadIO m)
        => OffsetName -> BatchSize -> PGConnection -> m (Stream (Of (Event a)) m r)
 resume name batchSize conn = do
-  eventNum <- fromMaybe (EventNumber 0) <$> retrieveOffset name conn
-  catchupStream <- fromEventNumber eventNum batchSize conn
+  eventNum <- fromMaybe (EventNumber 0) <$> retrieveOffset conn name
+  catchupStream <- fromEventNumber conn eventNum batchSize
   recordOffsets name conn catchupStream
 
 recordOffsets :: (EventData a, MonadIO m)
@@ -78,8 +78,8 @@ recordOffsets (OffsetName offsetName') conn stream = do
 
         tname = offsetTableName conn
 
-retrieveOffset :: MonadIO m => OffsetName -> PGConnection -> m (Maybe EventNumber)
-retrieveOffset name conn = liftIO . withResource (conn ^. pool) $ \dbConn ->
+retrieveOffset :: MonadIO m => PGConnection -> OffsetName -> m (Maybe EventNumber)
+retrieveOffset conn name = liftIO . withResource (conn ^. pool) $ \dbConn ->
   query dbConn q params >>= \case
     [Only n] -> return $ Just n
     _        -> return Nothing

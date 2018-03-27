@@ -1,7 +1,7 @@
 help:
 	@cat Makefile
 
-EXE=dispenser
+EXE=dispenser-server
 
 build:
 	stack build

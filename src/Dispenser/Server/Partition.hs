@@ -62,17 +62,17 @@ instance PartitionConnection PGConnection where
            <> " RETURNING event_number"
 
   fromNow :: (EventData a, MonadIO m)
-          => [StreamName] -> PGConnection
+          => PGConnection -> [StreamName]
           -> m (Stream (Of (Event a)) m r)
-  fromNow _streamNames _conn = panic "disco 2"
+  fromNow _conn _streamNames = panic "disco 2"
 
   rangeStream :: (EventData a, MonadIO m)
-              => BatchSize
+              => PGConnection
+              -> BatchSize
               -> [StreamName]
               -> (EventNumber, EventNumber)
-              -> PGConnection
               -> m (Stream (Of (Event a)) m ())
-  rangeStream batchSize streamNames (minNum, maxNum) conn = do
+  rangeStream conn batchSize streamNames (minNum, maxNum) = do
     -- TODO: filter by stream names
     batch :: Batch (Event a) <- liftIO $ wait =<< pgReadBatchFrom minNum batchSize conn
     let events      = unBatch batch
@@ -82,7 +82,7 @@ instance PartitionConnection PGConnection where
       else do
         let minNum' = succ . fromMaybe (EventNumber (-1))
               . maximumMay . map (view eventNumber) $ events
-        nextStream <- rangeStream batchSize streamNames (minNum', maxNum) conn
+        nextStream <- rangeStream conn batchSize streamNames (minNum', maxNum)
         return $ batchStream >>= const nextStream
 
 pgConnect :: Partition -> PoolSize -> IO PGConnection
@@ -154,8 +154,8 @@ partitionNameToChannelName = (<> "_stream")
 
 -- Right now there is no limit on batch size... so obviously we should uh... do
 -- something about that.
-pgReadBatchFrom :: ( EventData a ) =>
-                 EventNumber -> BatchSize -> PGConnection -> IO (Async (Batch (Event a)))
+pgReadBatchFrom :: EventData a
+                => EventNumber -> BatchSize -> PGConnection -> IO (Async (Batch (Event a)))
 pgReadBatchFrom (EventNumber n) (BatchSize sz) conn
   | sz <= 0   = async (return $ Batch [])
   | otherwise = async $ withResource (conn ^. pool) $ \dbConn -> do

@@ -8,43 +8,24 @@ module Dispenser.Server.Streams.Catchup
      ) where
 
 import           Dispenser.Server.Prelude
-import qualified Streaming.Prelude                as S
 
 import           Dispenser.Server.Partition
 import           Dispenser.Server.Streams.Event
-import           Dispenser.Server.Streams.Push
 import           Streaming
+import qualified Dispenser.Catchup as Catchup
 
 fromEventNumber :: forall m a r. (EventData a, MonadIO m)
-                => EventNumber -> BatchSize -> PGConnection
+                => PGConnection -> EventNumber -> BatchSize
                 -> m (Stream (Of (Event a)) m r)
-fromEventNumber eventNum batchSize conn = do
-  clstream <- S.store S.last <$> currentStreamFrom eventNum batchSize streamNames conn
-  return $ clstream >>= \case
-    Nothing :> _ -> catchup (EventNumber 0)
-    Just lastEvent :> _ -> do
-      let lastEventNum = lastEvent ^. eventNumber
-          nextEventNum = succ lastEventNum
-      currentEventNum <- liftIO $ currentEventNumber conn
-      if eventNumberDelta currentEventNum lastEventNum > maxHandOffDelta
-        then join . lift $ fromEventNumber nextEventNum batchSize conn
-        else catchup nextEventNum
-    where
-      maxHandOffDelta = 50 -- TODO
+fromEventNumber conn = Catchup.make $ Catchup.Config
+  (currentEventNumber conn)
+  (currentStreamFrom conn)
+  (fromEventNumber conn)
+  (fromNow conn)
+  (rangeStream conn)
 
-      streamNames = [] -- TODO
-
-      catchup en = join . lift $ pgFromNow conn >>= chaseFrom en
-
-      chaseFrom startNum stream = S.next stream >>= \case
-        Left _ -> return stream
-        Right (pivotEvent, stream') -> do
-          missingStream <- rangeStream batchSize streamNames (startNum, endNum) conn
-          return $ missingStream >>= const (S.yield pivotEvent) >>= const stream'
-          where
-            endNum = pred $ pivotEvent ^. eventNumber
-
+-- TODO: make this generic over some class that fromEventNumber is in
 fromZero :: (EventData a, MonadIO m)
-         => BatchSize -> PGConnection
+         => PGConnection -> BatchSize
          -> m (Stream (Of (Event a)) m r)
-fromZero = fromEventNumber (EventNumber 0)
+fromZero conn = fromEventNumber conn (EventNumber 0)
