@@ -8,10 +8,10 @@ module Dispenser.Server.Streams.Catchup
 
 import           Dispenser.Server.Prelude
 
+import qualified Dispenser.Catchup              as Catchup
 import           Dispenser.Server.Partition
 import           Dispenser.Server.Streams.Event
 import           Streaming
-import qualified Dispenser.Catchup as Catchup
 
 fromEventNumber :: forall m a r. (EventData a, MonadIO m)
                 => PGConnection -> EventNumber -> BatchSize

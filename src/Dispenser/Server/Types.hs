@@ -6,7 +6,8 @@ module Dispenser.Server.Types
      ) where
 
 import Dispenser.Prelude
-import Dispenser.Types as Exports
+
+import Dispenser.Types   as Exports
 
 newtype DatabaseURL = DatabaseURL Text
   deriving (Eq, Generic, Ord, Read, Show)

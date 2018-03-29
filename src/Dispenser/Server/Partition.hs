@@ -1,10 +1,10 @@
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE InstanceSigs        #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TemplateHaskell     #-}
 
 module Dispenser.Server.Partition
      ( module Exports
@@ -19,18 +19,19 @@ module Dispenser.Server.Partition
      , partitionNameToChannelName
      ) where
 
-import Dispenser.Server.Prelude   hiding ( drop )
-import Streaming
-import Data.String                       ( fromString )
-import Data.Text                         ( unpack )
-import Database.PostgreSQL.Simple        ( query_ )
-import Dispenser.Server.Db               ( poolFromUrl
-                                         , runSQL
-                                         )
-import Dispenser.Types          as Exports
-import qualified Data.List                as List
-import           Dispenser.Server.Orphans         ()
-import qualified Streaming.Prelude           as S
+import           Dispenser.Server.Prelude              hiding ( drop )
+import qualified Streaming.Prelude          as S
+
+import qualified Data.List                  as List
+import           Data.String                                  ( fromString )
+import           Data.Text                                    ( unpack )
+import           Database.PostgreSQL.Simple                   ( query_ )
+import           Dispenser.Server.Db                          ( poolFromUrl
+                                                              , runSQL
+                                                              )
+import           Dispenser.Server.Orphans                     ()
+import           Dispenser.Types            as Exports
+import           Streaming
 
 data PGConnection = PGConnection
   { _connectedPartition :: Partition

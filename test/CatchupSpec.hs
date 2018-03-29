@@ -6,7 +6,7 @@
 module CatchupSpec where
 
 import           Dispenser.Server.Prelude
-import qualified Streaming.Prelude         as S
+import qualified Streaming.Prelude                as S
 
 import           Dispenser.Server.Partition
 import           Dispenser.Server.Streams.Catchup

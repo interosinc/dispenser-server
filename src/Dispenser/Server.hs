@@ -4,10 +4,10 @@ module Dispenser.Server
 
 import Dispenser.Core                   as Exports
 import Dispenser.Server.Db              as Exports ( poolFromUrl )
-import Dispenser.Server.Partition       as Exports ( pgConnect
-                                                   , create
+import Dispenser.Server.Partition       as Exports ( create
                                                    , currentEventNumber
                                                    , drop
+                                                   , pgConnect
                                                    , recreate
                                                    )
 import Dispenser.Server.Streams.Catchup as Exports ( fromEventNumber
