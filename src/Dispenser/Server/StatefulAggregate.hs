@@ -38,25 +38,24 @@ data EphemeralAggregateSource m e r = EphemeralAggregateSource
   { stream :: Stream (Of (Event e)) m r
   }
 
--- forall m a x b s. MonadIO m
-
-instance AggregateSource (EphemeralAggregateSource m e r) where
-  findOrCreate :: MonadIO m1
-               => AggregateConfig m1 a x b s
+instance MonadIO m => AggregateSource (EphemeralAggregateSource m e r) where
+  findOrCreate :: MonadIO m
+               => AggregateConfig m a x b s
                -> EphemeralAggregateSource m e r
-               -> m1 (Either AggregateError (StatefulAggregate m1 a x b s))
+               -> m (Either AggregateError (StatefulAggregate m a x b s))
   findOrCreate config@AggregateConfig {..} EphemeralAggregateSource{..} = do
     var <- (liftIO . atomically . newTVar =<< initial)
     -- TODO: monitor the thread for crashing and crash the aggregate
-    -- void . liftIO . forkIO  $ do
-    --   S.effects $ S.mapM f stream
 
     let stream' :: MonadIO m => Stream (Of e) m r
         stream' = S.mapM f stream
 
+    -- void . liftIO . forkIO  $ do
+    --   S.effects $ S.mapM f stream
+
     -- AAAAAAAAAARGGGH
-    -- S.effects stream'
-    S.effects (g stream')
+    S.effects stream'
+    -- S.effects (g stream')
 
     return . Right . StatefulAggregate config $ var
     where
@@ -66,8 +65,8 @@ instance AggregateSource (EphemeralAggregateSource m e r) where
       _eventNumber' :: EventNumber
       _eventNumber' = undefined
 
-      g :: Stream (Of e) m r -> Stream (Of a0) m1 a1
-      g = undefined
+      -- g :: Stream (Of e) m r -> Stream (Of a0) m1 a1
+      -- g = undefined
 
   -- findOrCreate config@AggregateConfig {..} _ =
   --   Right . StatefulAggregate config <$> (liftIO . atomically . newTVar =<< initial)
