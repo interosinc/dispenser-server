@@ -82,6 +82,7 @@ executable dispenser-server
 test-suite dispenser-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
+  other-modules:    CatchupSpec
   main-is:             Spec.hs
   build-depends:       QuickCheck
                      , aeson
