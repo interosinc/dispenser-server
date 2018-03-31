@@ -32,9 +32,6 @@ data Aggregate m a x b = Aggregate
   , aggregateStep        :: x -> a -> m x
   }
 
--- (x -> a -> m x) (m x) (x -> m b)
--- FoldM step initial extract
-
 data AggFold m a x b = AggFold (x -> a -> m x) (m x) (x -> m b)
 
 newtype AggregateId = AggregateId Text
@@ -51,40 +48,32 @@ data Snapshot x = Snapshot
 makeFields ''Aggregate
 makeFields ''Snapshot
 
--- instance FromField (Snapshot x) where
---   fromField f mb = Snapshot <$> fromField f mb
-
 currentSnapshot :: MonadIO m => Aggregate m a x b -> m b
-currentSnapshot agg = do
-  snapshot' <- liftIO . atomically . readTVar $ var
-  (agg ^.  extract) (snapshot' ^. state)
-  where
-    var = agg ^. snapshotVar
+currentSnapshot agg = (liftIO . atomically . readTVar $ agg ^. snapshotVar)
+  >>= (agg ^.  extract) . view state
 
 create :: forall m a x b. (EventData a, FromField x, MonadIO m)
        => PGConnection -> AggregateId -> AggFold m a x b
        -> m (Aggregate m a x b)
 create conn id aggFold = do
   debug $ "Aggregates.create, id=" <> show id
-  snapshotMay <- liftIO $ latestSnapshot conn id
-  debug "snapshotMay"
-  case snapshotMay of
+  (liftIO $ latestSnapshot conn id) >>= \case
     Just snapshot' -> do
       debug "snapshotMay.Just"
-      stream <- fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
-      var <- liftIO . atomically . newTVar $ snapshot'
-      forkUpdater aggFold var stream
-      return $ Aggregate id ex' initial' var step'
+      fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
+        >>= startFrom snapshot'
     Nothing -> do
       debug "snapshotMay.Nothing"
-      stream <- fromZero conn batchSize
       initSnapshot <- Snapshot (EventNumber (-1)) <$> initial'
-      var <- liftIO . atomically . newTVar $ initSnapshot
-      forkUpdater aggFold var stream
-      return $ Aggregate id ex' initial' var step'
+      fromZero conn batchSize >>= startFrom initSnapshot
   where
     batchSize = BatchSize 100 -- TODO
     AggFold step' initial' ex' = aggFold
+
+    startFrom snapshot' stream = do
+      var <- liftIO . atomically . newTVar $ snapshot'
+      forkUpdater aggFold var stream
+      return $ Aggregate id ex' initial' var step'
 
 createAggTable :: PGConnection -> IO ()
 createAggTable conn = withResource (conn ^. pool) $ \dbConn -> do
@@ -125,6 +114,11 @@ forkUpdater aggFold var = void . S.effects . S.mapM updateVar
 
 latestSnapshot :: FromField x => PGConnection -> AggregateId -> IO (Maybe (Snapshot x))
 latestSnapshot conn (AggregateId id) = withResource (conn ^. pool) $ \dbConn ->
+  -- TODO: One problem is that if the below fails then it will appear as if
+  --       there is no snapshot and the aggregate will restart... which would
+  --       potentially cause monadic effects to re-trigger, etc.  we should
+  --       instead check the event number separately and if we load a snapshot
+  --       but then can't deserialize it we fail
   query dbConn q params >>= \case
     [(en, x)] -> return . Just $ Snapshot en x
     _         -> return Nothing
