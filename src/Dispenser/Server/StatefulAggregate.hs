@@ -6,12 +6,12 @@
 
 module Dispenser.Server.StatefulAggregate where
 
-import Dispenser.Prelude           hiding ( state )
+import           Dispenser.Prelude                hiding ( state )
+import qualified Streaming.Prelude           as S
 
-import qualified Streaming.Prelude as S
-import Control.Concurrent.STM.TVar
-import Dispenser.Types
-import Streaming
+import           Control.Concurrent.STM.TVar
+import           Dispenser.Types
+import           Streaming
 
 data AggregateConfig m a x b s = AggregateConfig
   { step     :: x -> a -> m x
