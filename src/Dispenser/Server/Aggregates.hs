@@ -1,6 +1,6 @@
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE InstanceSigs           #-}
 {-# LANGUAGE LambdaCase             #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NoImplicitPrelude      #-}
@@ -18,12 +18,11 @@ import           Data.String                                    ( fromString )
 import           Data.Text                                      ( unlines
                                                                 , unpack
                                                                 )
+import           Dispenser.Server.Db                            ( runSQL )
 import           Dispenser.Server.Partition              hiding ( eventNumber )
 import qualified Dispenser.Server.Partition       as DSP
 import           Dispenser.Server.Streams.Catchup
 import           Streaming
-import           Dispenser.Server.Db                          ( runSQL )
-
 
 data Aggregate m a x b = Aggregate
   { aggregateAggregateId :: AggregateId

@@ -1,5 +1,5 @@
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE InstanceSigs        #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
