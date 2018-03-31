@@ -18,9 +18,6 @@ library
   ghc-options:         -Wall
   exposed-modules:     Dispenser.Server
                      , Dispenser.Server.Aggregates
-                     , Dispenser.Server.Aggregates.Partition
-                     , Dispenser.Server.Aggregates.PartitionDemo
-                     , Dispenser.Server.Aggregates.ZMQ
                      , Dispenser.Server.Db
                      , Dispenser.Server.Main
                      , Dispenser.Server.Orphans
