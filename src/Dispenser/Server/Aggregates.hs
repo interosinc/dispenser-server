@@ -67,16 +67,16 @@ create :: forall m a x b. (EventData a, FromField x, MonadIO m)
 create conn id aggFold = do
   debug $ "Aggregates.create, id=" <> show id
   snapshotMay <- liftIO $ latestSnapshot conn id
-  debug $ "snapshotMay"
+  debug "snapshotMay"
   case snapshotMay of
     Just snapshot' -> do
-      debug $ "snapshotMay.Just"
+      debug "snapshotMay.Just"
       stream <- fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
       var <- liftIO . atomically . newTVar $ snapshot'
       forkUpdater aggFold var stream
       return $ Aggregate id ex' initial' var step'
     Nothing -> do
-      debug $ "snapshotMay.Nothing"
+      debug "snapshotMay.Nothing"
       stream <- fromZero conn batchSize
       initSnapshot <- Snapshot (EventNumber (-1)) <$> initial'
       var <- liftIO . atomically . newTVar $ initSnapshot
@@ -105,7 +105,7 @@ createAggTable conn = withResource (conn ^. pool) $ \dbConn -> do
 
 dropAggTable :: PGConnection -> IO ()
 dropAggTable conn = withResource (conn ^. pool) $ \dbConn ->
-  runSQL dbConn $ "DROP TABLE IF EXISTS " <> (snapshotTableName conn)
+  runSQL dbConn $ "DROP TABLE IF EXISTS " <> snapshotTableName conn
 
 forkUpdater :: forall m a x b r. (EventData a, MonadIO m)
             => AggFold m a x b -> TVar (Snapshot x) -> Stream (Of (Event a)) m r

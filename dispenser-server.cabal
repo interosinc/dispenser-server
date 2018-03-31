@@ -17,6 +17,7 @@ library
   hs-source-dirs:      src
   ghc-options:         -Wall
   exposed-modules:     Dispenser.Server
+                     , Dispenser.Server.AggDemo
                      , Dispenser.Server.Aggregates
                      , Dispenser.Server.Db
                      , Dispenser.Server.Main
