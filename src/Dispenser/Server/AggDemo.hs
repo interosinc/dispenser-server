@@ -42,13 +42,23 @@ instance FromField WordCounts where
       Left  _ -> mzero
       Right x -> return $ WordCounts x
 
+recreateDemo :: IO ()
+recreateDemo = do
+  putLn "AggDemo recreating..."
+  conn <- pgConnect demoPartition (PoolSize 10)
+  putLn "Connected"
+  recreate conn
+  putLn "Recreated table..."
+  recreateAggTable conn
+  putLn "Recreating agg table..."
+
 demo :: IO ()
 demo = do
   putLn "AggDemo"
-  conn <- pgConnect part (PoolSize 10)
-  recreate conn
-  -- TODO: recreateAgg ...
+  conn <- pgConnect demoPartition (PoolSize 10)
+  putLn "Connected."
   agg :: Aggregate IO DemoEvent WordCounts WordCounts <- Agg.create conn id aggFold
+  putLn "Aggregate created."
   snapshot :: WordCounts <- currentSnapshot agg
   putLn $ "Snapshot: " <> show snapshot
   where
@@ -67,13 +77,9 @@ demo = do
     initial'  = return $ WordCounts Map.empty
     extract'  = return
 
-    part      = Partition (DatabaseURL dbUrl') (PartitionName partName')
-    dbUrl'    = "postgres://dispenser@localhost:5432/dispenser"
-    partName' = "agg_demo"
-
 postMessage :: Text -> IO ()
 postMessage msg = do
-  conn <- pgConnect part (PoolSize 10)
+  conn <- pgConnect demoPartition (PoolSize 10)
   void $ postEvent conn streamNames e
   where
     e :: DemoEvent
@@ -81,6 +87,9 @@ postMessage msg = do
 
     streamNames = []
 
+demoPartition :: Partition
+demoPartition = part
+  where
     part      = Partition (DatabaseURL dbUrl') (PartitionName partName')
     dbUrl'    = "postgres://dispenser@localhost:5432/dispenser"
     partName' = "agg_demo"

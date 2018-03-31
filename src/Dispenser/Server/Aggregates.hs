@@ -22,8 +22,8 @@ import           Dispenser.Server.Partition              hiding ( eventNumber )
 import qualified Dispenser.Server.Partition       as DSP
 import           Dispenser.Server.Streams.Catchup
 import           Streaming
+import           Dispenser.Server.Db                          ( runSQL )
 
---import Dispenser.Types hiding (eventNumber)
 
 data Aggregate m a x b = Aggregate
   { aggregateAggregateId :: AggregateId
@@ -66,14 +66,18 @@ create :: forall m a x b. (EventData a, FromField x, MonadIO m)
        => PGConnection -> AggregateId -> AggFold m a x b
        -> m (Aggregate m a x b)
 create conn id aggFold = do
+  debug $ "Aggregates.create, id=" <> show id
   snapshotMay <- liftIO $ latestSnapshot conn id
+  debug $ "snapshotMay"
   case snapshotMay of
     Just snapshot' -> do
+      debug $ "snapshotMay.Just"
       stream <- fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
       var <- liftIO . atomically . newTVar $ snapshot'
       forkUpdater aggFold var stream
       return $ Aggregate id ex' initial' var step'
     Nothing -> do
+      debug $ "snapshotMay.Nothing"
       stream <- fromZero conn batchSize
       initSnapshot <- Snapshot (EventNumber (-1)) <$> initial'
       var <- liftIO . atomically . newTVar $ initSnapshot
@@ -82,6 +86,27 @@ create conn id aggFold = do
   where
     batchSize = BatchSize 100 -- TODO
     AggFold step' initial' ex' = aggFold
+
+createAggTable :: PGConnection -> IO ()
+createAggTable conn = withResource (conn ^. pool) $ \dbConn -> do
+  createTable dbConn
+  createIndexes dbConn
+  where
+    createTable :: Connection -> IO ()
+    createTable dbConn = runSQL dbConn $
+      "CREATE TABLE " <> table
+      <> " ( aggregate_id TEXT PRIMARY KEY"
+      <> " , event_number BIGSERIAL"
+      <> " , state        JSONB NOT NULL"
+      <> " )"
+
+    table = snapshotTableName conn
+
+    createIndexes = const $ return () -- TODO
+
+dropAggTable :: PGConnection -> IO ()
+dropAggTable conn = withResource (conn ^. pool) $ \dbConn ->
+  runSQL dbConn $ "DROP TABLE IF EXISTS " <> (snapshotTableName conn)
 
 forkUpdater :: forall m a x b r. (EventData a, MonadIO m)
             => AggFold m a x b -> TVar (Snapshot x) -> Stream (Of (Event a)) m r
@@ -111,6 +136,11 @@ latestSnapshot conn (AggregateId id) = withResource (conn ^. pool) $ \dbConn ->
           , "WHERE aggregate_id = ?"
           ]
     params = Only id
+
+recreateAggTable :: PGConnection -> IO ()
+recreateAggTable conn = do
+  dropAggTable conn
+  createAggTable conn
 
 snapshotTableName :: PGConnection -> Text
 snapshotTableName conn = partName <> "_aggregates"
