@@ -10,19 +10,19 @@
 
 module Dispenser.Server.Aggregates where
 
-import Dispenser.Server.Prelude         hiding ( state )
+import           Dispenser.Server.Prelude                hiding ( state )
+import qualified Streaming.Prelude                as S
 
-import           Data.Text                             ( unlines
-                                                       , unpack
-                                                       )
-import           Data.String                           ( fromString )
+import           Control.Concurrent.STM.TVar
+import           Data.String                                    ( fromString )
+import           Data.Text                                      ( unlines
+                                                                , unpack
+                                                                )
+import           Dispenser.Server.Partition              hiding ( eventNumber )
+import qualified Dispenser.Server.Partition       as DSP
+import           Dispenser.Server.Streams.Catchup
+import           Streaming
 
-import Control.Concurrent.STM.TVar
-import Dispenser.Server.Partition       hiding ( eventNumber )
-import qualified Dispenser.Server.Partition as DSP
-import Dispenser.Server.Streams.Catchup
-import Streaming
-import qualified Streaming.Prelude as S
 --import Dispenser.Types hiding (eventNumber)
 
 data Aggregate m a x b = Aggregate
@@ -62,10 +62,10 @@ currentSnapshot agg = do
   where
     var = agg ^. snapshotVar
 
-findOrCreate :: forall m a x b. (EventData a, FromField x, MonadIO m)
-             => PGConnection -> AggregateId -> AggFold m a x b
-             -> m (Aggregate m a x b)
-findOrCreate conn id aggFold = do
+create :: forall m a x b. (EventData a, FromField x, MonadIO m)
+       => PGConnection -> AggregateId -> AggFold m a x b
+       -> m (Aggregate m a x b)
+create conn id aggFold = do
   snapshotMay <- liftIO $ latestSnapshot conn id
   case snapshotMay of
     Just snapshot' -> do
