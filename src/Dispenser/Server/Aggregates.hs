@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase             #-}
@@ -7,31 +8,35 @@
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TemplateHaskell        #-}
 
-module Dispenser.Server.Aggregates
-     ( Aggregate
-     , currentSnapshot
-     , findOrCreate
-     -- TEMPORARY:
-     , aggregateId
-     , state
-     , stream
-     --
-     , aggregateAggregateId
-     , aggregateStream
-     , snapshotEventNumber
-     , snapshotState
-     ) where
+module Dispenser.Server.Aggregates where
 
 import Dispenser.Server.Prelude         hiding ( state )
 
+import           Data.Text                             ( unlines
+                                                       , unpack
+                                                       )
+import           Data.String                           ( fromString )
+
+import Control.Concurrent.STM.TVar
 import Dispenser.Server.Partition       hiding ( eventNumber )
+import qualified Dispenser.Server.Partition as DSP
 import Dispenser.Server.Streams.Catchup
 import Streaming
+import qualified Streaming.Prelude as S
+--import Dispenser.Types hiding (eventNumber)
 
-data Aggregate a x b r = Aggregate
+data Aggregate m a x b = Aggregate
   { aggregateAggregateId :: AggregateId
-  , aggregateStream      :: Stream (Of (Event a)) IO r
+  , aggregateExtract     :: x -> m b
+  , aggregateInitial     :: m x
+  , aggregateSnapshotVar :: TVar (Snapshot x)
+  , aggregateStep        :: x -> a -> m x
   }
+
+-- (x -> a -> m x) (m x) (x -> m b)
+-- FoldM step initial extract
+
+data AggFold m a x b = AggFold (x -> a -> m x) (m x) (x -> m b)
 
 newtype AggregateId = AggregateId Text
   deriving (Eq, Ord, Read, Show)
@@ -47,18 +52,67 @@ data Snapshot x = Snapshot
 makeFields ''Aggregate
 makeFields ''Snapshot
 
-findOrCreate :: (EventData a, MonadIO m)
-             => PGConnection -> AggregateId -> m (Aggregate a x b r)
-findOrCreate conn id = liftIO $ Aggregate id <$> (latestSnapshot id >>= \case
-  Just snapshot -> fromEventNumber conn (succ $ snapshot ^. eventNumber) batchSize
-  Nothing       -> fromZero conn batchSize
-                                                 )
+-- instance FromField (Snapshot x) where
+--   fromField f mb = Snapshot <$> fromField f mb
+
+currentSnapshot :: MonadIO m => Aggregate m a x b -> m b
+currentSnapshot agg = do
+  snapshot' <- liftIO . atomically . readTVar $ var
+  (agg ^.  extract) (snapshot' ^. state)
+  where
+    var = agg ^. snapshotVar
+
+findOrCreate :: forall m a x b. (EventData a, FromField x, MonadIO m)
+             => PGConnection -> AggregateId -> AggFold m a x b
+             -> m (Aggregate m a x b)
+findOrCreate conn id aggFold = do
+  snapshotMay <- liftIO $ latestSnapshot conn id
+  case snapshotMay of
+    Just snapshot' -> do
+      stream <- fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
+      var <- liftIO . atomically . newTVar $ snapshot'
+      forkUpdater aggFold var stream
+      return $ Aggregate id ex' initial' var step'
+    Nothing -> do
+      stream <- fromZero conn batchSize
+      initSnapshot <- Snapshot (EventNumber (-1)) <$> initial'
+      var <- liftIO . atomically . newTVar $ initSnapshot
+      forkUpdater aggFold var stream
+      return $ Aggregate id ex' initial' var step'
   where
     batchSize = BatchSize 100 -- TODO
+    AggFold step' initial' ex' = aggFold
 
-latestSnapshot :: AggregateId -> IO (Maybe (Snapshot x))
-latestSnapshot _ = return Nothing -- TODO
+forkUpdater :: forall m a x b r. (EventData a, MonadIO m)
+            => AggFold m a x b -> TVar (Snapshot x) -> Stream (Of (Event a)) m r
+            -> m ()
+forkUpdater aggFold var = void . S.effects . S.mapM updateVar
+  where
+    updateVar :: Event a -> m ()
+    updateVar e = do
+      curSnapshot :: Snapshot x <- liftIO . atomically $ readTVar var
+      let s :: x = curSnapshot ^. state
+      x' <- _step' s (e ^. eventData)
+      let en'       = e ^. DSP.eventNumber
+          snapshot' = Snapshot en' x'
+      liftIO . atomically $ writeTVar var snapshot'
 
-currentSnapshot :: Aggregate a x b r -> IO b
-currentSnapshot _ = undefined
+    AggFold _step' _initial' _ex' = aggFold
 
+latestSnapshot :: FromField x => PGConnection -> AggregateId -> IO (Maybe (Snapshot x))
+latestSnapshot conn (AggregateId id) = withResource (conn ^. pool) $ \dbConn ->
+  query dbConn q params >>= \case
+    [(en, x)] -> return . Just $ Snapshot en x
+    _         -> return Nothing
+  where
+    q = fromString . unpack . unlines $
+          [ "SELECT event_number, state"
+          , "FROM " <> snapshotTableName conn
+          , "WHERE aggregate_id = ?"
+          ]
+    params = Only id
+
+snapshotTableName :: PGConnection -> Text
+snapshotTableName conn = partName <> "_aggregates"
+  where
+    partName = unPartitionName $ conn ^. (connectedPartition . partitionName)

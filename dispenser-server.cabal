@@ -41,6 +41,7 @@ library
                      , foldl
                      , lens
                      , monad-control
+                     , monad-io-adapter
                      , postgresql-simple
                      , random
                      , resource-pool
@@ -68,6 +69,7 @@ executable dispenser-server
                   , foldl
                   , lens
                   , monad-control
+                  , monad-io-adapter
                   , postgresql-simple
                   , random
                   , resource-pool
@@ -97,6 +99,7 @@ test-suite dispenser-test
                      , hspec
                      , lens
                      , monad-control
+                     , monad-io-adapter
                      , postgresql-simple
                      , random
                      , resource-pool
