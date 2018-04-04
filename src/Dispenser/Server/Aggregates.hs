@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE InstanceSigs           #-}
@@ -13,6 +14,7 @@ module Dispenser.Server.Aggregates where
 import           Dispenser.Server.Prelude                hiding ( state )
 import qualified Streaming.Prelude                as S
 
+import           Control.Monad.Trans.Control                    ( liftBaseDiscard )
 import           Control.Concurrent.STM.TVar
 import           Data.String                                    ( fromString )
 import           Data.Text                                      ( unlines
@@ -52,7 +54,7 @@ currentSnapshot :: MonadIO m => Aggregate m a x b -> m b
 currentSnapshot agg = (liftIO . atomically . readTVar $ agg ^. snapshotVar)
   >>= (agg ^.  extract) . view state
 
-create :: forall m a x b. (EventData a, FromField x, MonadIO m)
+create :: forall m a x b. (EventData a, FromField x, MonadIO m, MonadBaseControl IO m)
        => PGConnection -> AggregateId -> AggFold m a x b
        -> m (Aggregate m a x b)
 create conn id aggFold = do
@@ -96,10 +98,11 @@ dropAggTable :: PGConnection -> IO ()
 dropAggTable conn = withResource (conn ^. pool) $ \dbConn ->
   runSQL dbConn $ "DROP TABLE IF EXISTS " <> snapshotTableName conn
 
-forkUpdater :: forall m a x b r. (EventData a, MonadIO m)
+forkUpdater :: forall m a x b r. (EventData a, MonadIO m, MonadBaseControl IO m)
             => AggFold m a x b -> TVar (Snapshot x) -> Stream (Of (Event a)) m r
             -> m ()
-forkUpdater aggFold var = void . S.effects . S.mapM updateVar
+forkUpdater aggFold var =
+  void . liftBaseDiscard forkIO . void . S.effects . S.mapM updateVar
   where
     updateVar :: Event a -> m ()
     updateVar e = do

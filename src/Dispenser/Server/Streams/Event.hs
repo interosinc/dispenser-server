@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -23,5 +24,7 @@ currentStreamFrom :: forall m a. (EventData a, MonadIO m)
                   => PGConnection -> EventNumber -> BatchSize -> [StreamName]
                   -> m (Stream (Of (Event a)) m ())
 currentStreamFrom conn minEvent batchSize streamNames = do
+  putLn "csf:start"
   endNum <- liftIO $ currentEventNumber conn
+  putLn $ "csf:mid:range:" <> show endNum
   rangeStream conn batchSize streamNames (minEvent, endNum)

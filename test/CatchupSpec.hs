@@ -32,32 +32,50 @@ spec = describe "Catchup" $ do
   let batchSize = 100
   it "should not drop any events" $ do
     conn <- createTestPartition
-    s1 :: TestStream () <- S.take 5 <$> fromEventNumber conn (EventNumber 0) batchSize
-    postTestEvent 1 conn
-    postTestEvent 2 conn
-    postTestEvent 3 conn
+    s :: TestStream () <- fromEventNumber conn (EventNumber 0) batchSize
+    let s1 :: TestStream () = S.take 3 s
+    postTestEvent conn 1
+    postTestEvent conn 2
+    postTestEvent conn 3
     Right (e1, s1')   <- S.next s1
     Right (e2, s1'')  <- S.next s1'
     Right (e3, s1''') <- S.next s1''
     let front1 :: [Event TestEvent] = [e1, e2, e3]
     back1 :: [Event TestEvent] <- S.fst' <$> S.toList s1'''
-    let all1 = front1 ++ back1
-    all1 `shouldBe` []
-    _s2 :: TestStream () <- S.take 5 <$> fromEventNumber conn (EventNumber 0) batchSize
-    postTestEvent 4 conn
-    postTestEvent 5 conn
-    postTestEvent 6 conn
-    _s3 :: TestStream () <- S.take 5 <$> fromEventNumber conn (EventNumber 0) batchSize
-    (1 :: Int) `shouldBe` 2
+    let both = front1 ++ back1
+    map (unEventNumber . view eventNumber) both `shouldBe` [1..3]
+    map (view eventStreams) both `shouldBe`
+      [[StreamName "test"], [StreamName "test"], [StreamName "test"]]
+    map (view eventData) both `shouldBe` map TestEvent [1..3]
 
-postTestEvent :: Int -> PGConnection -> IO ()
-postTestEvent = panic "postTestEvent not impl"
+    s2 :: TestStream () <- S.take 5 <$> fromEventNumber conn (EventNumber 0) batchSize
+    postTestEvent conn 4
+    postTestEvent conn 5
+    postTestEvent conn 6
+
+    events2 :: [Event TestEvent] <- S.fst' <$> S.toList s2
+    map (unEventNumber . view eventNumber) events2 `shouldBe` [1..5]
+    map (unEventNumber . view eventNumber) events2 `shouldBe` [1..5]
+
+    s3 :: TestStream () <- S.take 6 <$> fromEventNumber conn (EventNumber 0) batchSize
+    events3 <- S.fst' <$> S.toList s3
+    map (unEventNumber . view eventNumber) events3 `shouldBe` [1..6]
+
+postTestEvent :: PGConnection -> Int -> IO ()
+postTestEvent conn = void . postEvent conn [StreamName "test"] . TestInt
+
+newtype TestInt = TestInt Int
+  deriving (Eq, Generic, Ord, Read, Show)
+
+instance FromJSON  TestInt
+instance ToJSON    TestInt
+instance EventData TestInt
 
 createTestPartition :: IO PGConnection
 createTestPartition = do
   pname :: Text <- ("test_disp_" <>) . show <$> randomRIO (0, maxBound :: Int)
   conn <- pgConnect (Partition dbUrl' (PartitionName pname)) (PoolSize 5)
   recreate conn
-  panic "createTestPartition not impl"
+  return conn
   where
     dbUrl' = DatabaseURL "postgres://dispenser@localhost:5432/dispenser"
