@@ -19,28 +19,26 @@ module Dispenser.Server.Partition
      , partitionNameToChannelName
      ) where
 
-import qualified Data.ByteString.Lazy                    as Lazy
-import           Data.Text                                       ( pack
-                                                                 , unpack
-                                                                 )
-import qualified Data.HashMap.Strict                     as HM
-import           Control.Monad.Fail                              ( fail )
+import           Dispenser.Server.Prelude                           hiding ( drop )
+import qualified Streaming.Prelude                       as S
 
-import           Dispenser.Server.Prelude              hiding ( drop )
-import qualified Streaming.Prelude          as S
-
-import           Database.PostgreSQL.Simple.Notification
-
-import qualified Data.List                  as List
-import           Data.String                                  ( fromString )
-import           Database.PostgreSQL.Simple                   ( query_ )
-import           Dispenser.Server.Db                          ( poolFromUrl
-                                                              , runSQL
-                                                              )
-import           Dispenser.Server.Orphans                     ()
-import           Dispenser.Types            as Exports
-import           Streaming
+import           Control.Monad.Fail                                        ( fail )
 import           Data.Aeson
+import qualified Data.ByteString.Lazy                    as Lazy
+import qualified Data.HashMap.Strict                     as HM
+import qualified Data.List                               as List
+import           Data.String                                               ( fromString )
+import           Data.Text                                                 ( pack
+                                                                           , unpack
+                                                                           )
+import           Database.PostgreSQL.Simple                                ( query_ )
+import           Database.PostgreSQL.Simple.Notification
+import           Dispenser.Server.Db                                       ( poolFromUrl
+                                                                           , runSQL
+                                                                           )
+import           Dispenser.Server.Orphans                                  ()
+import           Dispenser.Types                         as Exports
+import           Streaming
 
 data PGConnection = PGConnection
   { _connectedPartition :: Partition
@@ -114,23 +112,15 @@ instance PartitionConnection PGConnection where
     | maxNum < EventNumber 0 = return mempty
     | otherwise = do
         -- TODO: filter by stream names
-        putLn $ "rangeStream:1:" <> show (batchSize, streamNames, (minNum, maxNum))
         batch :: Batch (Event a) <- liftIO $ wait =<< pgReadBatchFrom minNum batchSize conn
-        putLn "rangeStream:2"
         let events      = unBatch batch
             batchStream = S.each events
-        putLn "rangeStream:3"
         if any ((>= maxNum) . view eventNumber) events
-          then do
-            putLn "rangeStream:4"
-            return $ S.takeWhile ((<= maxNum) . view eventNumber) batchStream
+          then return $ S.takeWhile ((<= maxNum) . view eventNumber) batchStream
           else do
-            putLn "rangeStream:5"
             let minNum' = succ . fromMaybe (EventNumber (-1))
                   . maximumMay . map (view eventNumber) $ events
-            putLn "rangeStream:6"
             nextStream <- rangeStream conn batchSize streamNames (minNum', maxNum)
-            putLn "rangeStream:7"
             return $ batchStream >>= const nextStream
 
 pgConnect :: Partition -> PoolSize -> IO PGConnection

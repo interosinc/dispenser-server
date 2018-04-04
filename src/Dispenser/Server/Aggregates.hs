@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE InstanceSigs           #-}
@@ -14,8 +14,8 @@ module Dispenser.Server.Aggregates where
 import           Dispenser.Server.Prelude                hiding ( state )
 import qualified Streaming.Prelude                as S
 
-import           Control.Monad.Trans.Control                    ( liftBaseDiscard )
 import           Control.Concurrent.STM.TVar
+import           Control.Monad.Trans.Control                    ( liftBaseDiscard )
 import           Data.String                                    ( fromString )
 import           Data.Text                                      ( unlines
                                                                 , unpack
@@ -59,7 +59,7 @@ create :: forall m a x b. (EventData a, FromField x, MonadIO m, MonadBaseControl
        -> m (Aggregate m a x b)
 create conn id aggFold = do
   debug $ "Aggregates.create, id=" <> show id
-  (liftIO $ latestSnapshot conn id) >>= \case
+  liftIO (latestSnapshot conn id) >>= \case
     Just snapshot' -> do
       debug "snapshotMay.Just"
       fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
