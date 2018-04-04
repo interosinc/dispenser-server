@@ -52,18 +52,25 @@ recreateDemo = do
   recreateAggTable conn
   putLn "Recreating agg table..."
 
-demo :: IO ()
-demo = do
+demo :: Text -> IO ()
+demo msg = do
   putLn "AggDemo"
   conn <- pgConnect demoPartition (PoolSize 10)
   putLn "Connected."
   agg :: Aggregate IO DemoEvent WordCounts WordCounts <- Agg.create conn id aggFold
   putLn "Aggregate created."
-  snapshot :: WordCounts <- currentSnapshot agg
-  putLn $ "Snapshot: " <> show snapshot
+  snapshot0 :: WordCounts <- currentSnapshot agg
+  putLn $ "Before: " <> show snapshot0
+  -- TODO: do this via command to aggregate instead of backdoor postEvent
+  void . wait =<< postEvent conn streamNames (MessageEvent . toLower $ msg)
+  threadDelay $ 250 * 1000
+  snapshot1 :: WordCounts <- currentSnapshot agg
+  putLn $ "After: " <> show snapshot1
   where
     id        = AggregateId "demoAgg1"
     aggFold   = AggFold step' initial' extract'
+
+    streamNames = []
 
     step' :: WordCounts -> DemoEvent -> IO WordCounts
     step' (WordCounts m) (MessageEvent txt) = return . WordCounts $ foldr f z xs
