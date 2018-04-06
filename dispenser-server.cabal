@@ -41,6 +41,7 @@ library
                      , monad-control
                      , monad-io-adapter
                      , postgresql-simple
+                     , postgresql-simple-url
                      , random
                      , resource-pool
                      , stm
@@ -69,6 +70,7 @@ executable dispenser-server
                   , monad-control
                   , monad-io-adapter
                   , postgresql-simple
+                  , postgresql-simple-url
                   , random
                   , resource-pool
                   , stm
@@ -83,6 +85,8 @@ test-suite dispenser-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   other-modules:    CatchupSpec
+                  , EventStreamSpec
+                  , TestHelpers
   main-is:             Spec.hs
   build-depends:       QuickCheck
                      , aeson
@@ -99,6 +103,7 @@ test-suite dispenser-test
                      , monad-control
                      , monad-io-adapter
                      , postgresql-simple
+                     , postgresql-simple-url
                      , random
                      , resource-pool
                      , stm
