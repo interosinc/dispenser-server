@@ -49,7 +49,7 @@ instance FromJSON a => FromJSON (PushEvent a) where
 pgFromNow :: (EventData a, MonadIO m)
         => PGConnection -> m (Stream (Of (Event a)) m r)
 pgFromNow partConn = do
-  putLn $ "pgFromNow!"
+  debug $ "pgFromNow!"
   -- TODO: This will leak connections if an exception occurs.
   --       conn should be destroyed or returned
   (conn, _) <- liftIO $ takeResource (partConn ^. pool)

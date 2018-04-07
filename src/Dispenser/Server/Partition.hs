@@ -76,19 +76,19 @@ instance PartitionConnection PGConnection where
           => PGConnection -> [StreamName]
           -> m (Stream (Of (Event a)) m r)
   fromNow conn _streamNames = do
-    putLn $ "Dispenser.Server.Partition: fromNow, streamNames=" <> show _streamNames
+    debug $ "Dispenser.Server.Partition: fromNow, streamNames=" <> show _streamNames
     -- TODO: This will leak connections if an exception occurs.
     --       conn should be destroyed or returned
     (dbConn, _) <- liftIO $ takeResource (conn ^. pool)
-    putLn $ "Listening for notifications on: " <> show channelText
+    debug $ "Listening for notifications on: " <> show channelText
     void . liftIO . execute_ dbConn . fromString . unpack $ "LISTEN " <> channelText
-    putLn "pushStream acquired connection"
+    debug "pushStream acquired connection"
     return . forever $ do
-      putLn "pushStream attempting to acquire notification"
+      debug "pushStream attempting to acquire notification"
       n <- liftIO $ getNotification dbConn
-      putLn $ "got notification: " <> show n
+      debug $ "got notification: " <> show n
       when (notificationChannel n == channelBytes) $ do
-        putLn "notification was for the right channel!"
+        debug "notification was for the right channel!"
         case deserializeNotificationEvent . notificationData $ n of
           Left err -> panic $ "pushStream ERROR: " <> show err
           Right e  -> do
@@ -131,7 +131,7 @@ instance PartitionConnection PGConnection where
     where
       debugRangeStream :: MonadIO m
                        => [StreamName] -> (EventNumber, EventNumber) -> String -> m ()
-      debugRangeStream streamNames' range msg = putLn $ "debugRangeStream: streamNames="
+      debugRangeStream streamNames' range msg = debug $ "debugRangeStream: streamNames="
         <> show streamNames'
         <> " "
         <> show range

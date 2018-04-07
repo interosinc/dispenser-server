@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -10,6 +11,7 @@ import qualified Streaming.Prelude                as S
 
 import           Dispenser.Server.Partition
 import           Dispenser.Server.Streams.Catchup
+import           Streaming
 import           Test.Hspec
 import           TestHelpers
 
@@ -18,58 +20,48 @@ main = hspec spec
 
 spec :: Spec
 spec = describe "Catchup" $ do
-  let batchSize = 100
-  it "should not drop any events" $ do
-    conn <- createTestPartition
-    putLn "a"
-    s :: TestStream () <- fromEventNumber conn (EventNumber 0) batchSize
-    let s1 :: TestStream () = S.take 3 s
-    putLn "b"
-    postTestEvent conn 1
-    putLn "c"
-    postTestEvent conn 2
-    putLn "d"
-    postTestEvent conn 3
-    putLn "e"
-    Right (e1, s1')   <- S.next s1
-    putLn "f"
-    Right (e2, s1'')  <- S.next s1'
-    putLn "g"
-    Right (e3, s1''') <- S.next s1''
-    putLn "h"
-    let front1 :: [Event TestEvent] = [e1, e2, e3]
-    putLn "i"
-    back1 :: [Event TestEvent] <- S.fst' <$> S.toList s1'''
-    putLn "j"
-    let both = front1 ++ back1
-    putLn "k"
-    map (unEventNumber . view eventNumber) both `shouldBe` [1..3]
-    putLn "l"
-    map (view eventStreams) both `shouldBe`
-      [[StreamName "test"], [StreamName "test"], [StreamName "test"]]
-    putLn "m"
-    map (view eventData) both `shouldBe` map TestEvent [1..3]
-    putLn "n"
+  forM_ (map BatchSize [1..10]) $ \batchSize -> do
 
-    s2 :: TestStream () <- S.take 5 <$> fromEventNumber conn (EventNumber 0) batchSize
-    putLn "o"
-    postTestEvent conn 4
-    putLn "p"
-    postTestEvent conn 5
-    putLn "q"
-    postTestEvent conn 6
-    putLn "r"
+    context "given a stream with 3 events in it" $ do
+      let testStream = makeTestStream batchSize 3
 
-    events2 :: [Event TestEvent] <- S.fst' <$> S.toList s2
-    putLn "s"
-    map (unEventNumber . view eventNumber) events2 `shouldBe` [1..5]
-    putLn "t"
-    map (unEventNumber . view eventNumber) events2 `shouldBe` [1..5]
-    putLn "u"
+      it "should be able to take the first 2 immediately" $ do
+        stream <- S.take 2 . snd <$> testStream
+        xs <- S.fst' <$> S.toList stream
+        map (view eventData) xs `shouldBe` map TestEvent [1..2]
 
-    s3 :: TestStream () <- S.take 6 <$> fromEventNumber conn (EventNumber 0) batchSize
-    putLn "v"
-    events3 <- S.fst' <$> S.toList s3
-    putLn "w"
-    map (unEventNumber . view eventNumber) events3 `shouldBe` [1..6]
-    putLn "x"
+      it "should be able to take 5 if two more are posted asynchronously" $ do
+        (conn, stream) <- testStream
+        void . forkIO $ do
+          sleep 0.05
+          postTestEvent conn 4
+          sleep 0.05
+          postTestEvent conn 5
+          sleep 0.05
+          postTestEvent conn 6
+        let stream' = S.take 5 stream
+        xs <- S.fst' <$> S.toList stream'
+        map (view eventData) xs `shouldBe` map TestEvent [1..5]
+
+    context "given a stream with 20 events in it" $ do
+      let testStream = makeTestStream batchSize 20
+
+      it "should be able to take all 20" $ do
+        stream <- S.take 20 . snd <$> testStream
+        xs <- S.fst' <$> S.toList stream
+        map (view eventData) xs `shouldBe` map TestEvent [1..20]
+
+      it "should be able to take 25 if 5 are posted asynchronously" $ do
+        (conn, stream) <- testStream
+        void . forkIO $ mapM_ ((sleep 0.05 >>) . postTestEvent conn) [21..25]
+        let stream' = S.take 25 stream
+        xs <- S.fst' <$> S.toList stream'
+        map (view eventData) xs `shouldBe` map TestEvent [1..25]
+
+makeTestStream :: EventData a
+               => BatchSize -> Int -> IO (PGConnection, Stream (Of (Event a)) IO r)
+makeTestStream batchSize n = do
+  conn <- createTestPartition
+  mapM_ (postTestEvent conn) [1..n]
+  (conn,) <$> fromZero conn batchSize
+

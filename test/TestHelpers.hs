@@ -52,6 +52,7 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url of
     conn <- PG.connect connectInfo
     tableNames :: [Text] <- map fromOnly <$> query_ conn q
     mapM_ (deleteTable conn) tableNames
+    putLn $ "Removed " <> show (length tableNames) <> " partitions."
   where
     deleteTable :: Connection -> Text -> IO ()
     deleteTable conn tableName = do
