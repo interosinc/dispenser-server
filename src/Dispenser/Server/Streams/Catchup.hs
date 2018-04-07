@@ -24,6 +24,7 @@ fromEventNumber conn = Catchup.make $ Catchup.Config
   (rangeStream conn)
 
 -- TODO: make this generic over some class that fromEventNumber is in
+-- TODO: see also Ebb.hs
 fromZero :: (EventData a, MonadIO m)
          => PGConnection -> BatchSize
          -> m (Stream (Of (Event a)) m r)

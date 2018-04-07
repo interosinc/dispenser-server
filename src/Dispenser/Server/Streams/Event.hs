@@ -24,5 +24,7 @@ currentStreamFrom :: forall m a. (EventData a, MonadIO m)
                   => PGConnection -> EventNumber -> BatchSize -> [StreamName]
                   -> m (Stream (Of (Event a)) m ())
 currentStreamFrom conn minEvent batchSize streamNames = do
+  putLn $ "currentStreamFrom " <> show minEvent <> ", streamNames=" <> show streamNames
   endNum <- liftIO $ currentEventNumber conn
+  putLn $ "endNum=" <> show endNum
   rangeStream conn batchSize streamNames (minEvent, endNum)

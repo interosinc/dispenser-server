@@ -76,18 +76,19 @@ instance PartitionConnection PGConnection where
           => PGConnection -> [StreamName]
           -> m (Stream (Of (Event a)) m r)
   fromNow conn _streamNames = do
+    putLn $ "Dispenser.Server.Partition: fromNow, streamNames=" <> show _streamNames
     -- TODO: This will leak connections if an exception occurs.
     --       conn should be destroyed or returned
     (dbConn, _) <- liftIO $ takeResource (conn ^. pool)
-    debug $ "Listening for notifications on: " <> show channelText
+    putLn $ "Listening for notifications on: " <> show channelText
     void . liftIO . execute_ dbConn . fromString . unpack $ "LISTEN " <> channelText
-    -- debug "pushStream acquired connection"
+    putLn "pushStream acquired connection"
     return . forever $ do
-      -- debug "pushStream attempting to acquire notification"
+      putLn "pushStream attempting to acquire notification"
       n <- liftIO $ getNotification dbConn
-      -- debug $ "got notification: " <> show n
-      when (notificationChannel n == channelBytes) $
-        -- debug "notification was for the right channel!"
+      putLn $ "got notification: " <> show n
+      when (notificationChannel n == channelBytes) $ do
+        putLn "notification was for the right channel!"
         case deserializeNotificationEvent . notificationData $ n of
           Left err -> panic $ "pushStream ERROR: " <> show err
           Right e  -> do
@@ -108,9 +109,14 @@ instance PartitionConnection PGConnection where
               -> (EventNumber, EventNumber)
               -> m (Stream (Of (Event a)) m ())
   rangeStream conn batchSize streamNames (minNum, maxNum)
-    | maxNum < minNum        = return mempty
-    | maxNum < EventNumber 0 = return mempty
+    | maxNum < minNum        = do
+        debugRangeStream streamNames (minNum, maxNum) "maxNum < minNum"
+        return mempty
+    | maxNum < EventNumber 0 = do
+        debugRangeStream streamNames (minNum, maxNum) "max EventNumber < 0"
+        return mempty
     | otherwise = do
+        debugRangeStream streamNames (minNum, maxNum) "otherwise"
         -- TODO: filter by stream names
         batch :: Batch (Event a) <- liftIO $ wait =<< pgReadBatchFrom minNum batchSize conn
         let events      = unBatch batch
@@ -122,6 +128,15 @@ instance PartitionConnection PGConnection where
                   . maximumMay . map (view eventNumber) $ events
             nextStream <- rangeStream conn batchSize streamNames (minNum', maxNum)
             return $ batchStream >>= const nextStream
+    where
+      debugRangeStream :: MonadIO m
+                       => [StreamName] -> (EventNumber, EventNumber) -> String -> m ()
+      debugRangeStream streamNames' range msg = putLn $ "debugRangeStream: streamNames="
+        <> show streamNames'
+        <> " "
+        <> show range
+        <> " -- "
+        <> show msg
 
 pgConnect :: Partition -> PoolSize -> IO PGConnection
 pgConnect part (PoolSize size) =
