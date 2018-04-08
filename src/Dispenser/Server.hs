@@ -16,5 +16,4 @@ import Dispenser.Server.Streams.Catchup as Exports ( fromEventNumber
 import Dispenser.Server.Streams.Event   as Exports ( currentStream
                                                    , currentStreamFrom
                                                    )
-import Dispenser.Server.Streams.Push    as Exports ( pgFromNow )
 

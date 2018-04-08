@@ -5,6 +5,8 @@ module Dispenser.Server.Prelude
 import Dispenser.Prelude                    as Exports
 
 import Data.Pool                            as Exports ( Pool
+                                                       , LocalPool
+                                                       , putResource
                                                        , takeResource
                                                        , withResource
                                                        )

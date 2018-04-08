@@ -23,6 +23,7 @@ import           Dispenser.Server.Prelude                           hiding ( dro
 import qualified Streaming.Prelude                       as S
 
 import           Control.Monad.Fail                                        ( fail )
+import           Control.Monad.Trans.Resource                              ( allocate )
 import           Data.Aeson
 import qualified Data.ByteString.Lazy                    as Lazy
 import qualified Data.HashMap.Strict                     as HM
@@ -55,7 +56,7 @@ newtype PushEvent a = PushEvent { unEvent :: Event a }
 
 -- TODO: `Foldable a` instead of `[a]`?
 instance PartitionConnection PGConnection where
-  appendEvents :: (EventData a, MonadIO m)
+  appendEvents :: (EventData a, MonadIO m, MonadResource m)
                => PGConnection -> [StreamName] -> NonEmptyBatch a
                -> m (Async EventNumber)
   appendEvents conn streamNames (NonEmptyBatch b) =
@@ -72,14 +73,17 @@ instance PartitionConnection PGConnection where
            <> " VALUES (?, ?)"
            <> " RETURNING event_number"
 
-  fromNow :: (EventData a, MonadIO m)
+  fromNow :: (EventData a, MonadIO m, MonadResource m)
           => PGConnection -> [StreamName]
           -> m (Stream (Of (Event a)) m r)
   fromNow conn _streamNames = do
     debug $ "Dispenser.Server.Partition: fromNow, streamNames=" <> show _streamNames
     -- TODO: This will leak connections if an exception occurs.
     --       conn should be destroyed or returned
-    (dbConn, _) <- liftIO $ takeResource (conn ^. pool)
+
+    dbConn <- takeConnection conn
+    -- (dbConn, _) <- liftIO $ takeResource (conn ^. pool)
+
     debug $ "Listening for notifications on: " <> show channelText
     void . liftIO . execute_ dbConn . fromString . unpack $ "LISTEN " <> channelText
     debug "pushStream acquired connection"
@@ -102,7 +106,7 @@ instance PartitionConnection PGConnection where
       deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
       deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
 
-  rangeStream :: (EventData a, MonadIO m)
+  rangeStream :: (EventData a, MonadIO m, MonadResource m)
               => PGConnection
               -> BatchSize
               -> [StreamName]
@@ -245,3 +249,21 @@ instance FromJSON a => FromJSON (PushEvent a) where
       parseField s obj = case HM.lookup s obj of
         Just x  -> parseJSON x
         Nothing -> fail $ "no '" <> unpack s <> "' field"
+
+takeConnection :: MonadResource m
+               => PGConnection -> m Connection
+takeConnection conn = do
+  (dbConn, _localPool) <- takeConnectionLP conn
+  return dbConn
+
+takeConnectionLP :: MonadResource m
+                 => PGConnection -> m (Connection, LocalPool Connection)
+takeConnectionLP conn = do
+  (_key, x) <- allocate take' release'
+  return x
+  where
+    take' :: IO (Connection, LocalPool Connection)
+    take' = takeResource (conn ^. pool)
+
+    release' :: (Connection, LocalPool Connection) -> IO ()
+    release' (conn', localPool) = putResource localPool conn'

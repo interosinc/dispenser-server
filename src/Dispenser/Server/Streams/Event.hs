@@ -15,12 +15,12 @@ import Dispenser.Server.Partition ( PGConnection
 import Dispenser.Server.Types
 import Streaming
 
-currentStream :: forall m a. (EventData a, MonadIO m)
+currentStream :: forall m a. (EventData a, MonadIO m, MonadResource m)
               => PGConnection -> BatchSize -> [StreamName]
               -> m (Stream (Of (Event a)) m ())
 currentStream conn = currentStreamFrom conn (EventNumber 0)
 
-currentStreamFrom :: forall m a. (EventData a, MonadIO m)
+currentStreamFrom :: forall m a. (EventData a, MonadIO m, MonadResource m)
                   => PGConnection -> EventNumber -> BatchSize -> [StreamName]
                   -> m (Stream (Of (Event a)) m ())
 currentStreamFrom conn minEvent batchSize streamNames = do

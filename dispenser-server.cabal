@@ -26,7 +26,6 @@ library
                      , Dispenser.Server.Prelude
                      , Dispenser.Server.Streams.Catchup
                      , Dispenser.Server.Streams.Event
-                     , Dispenser.Server.Streams.Push
                      , Dispenser.Server.Streams.Resumable
                      , Dispenser.Server.Types
   build-depends:       aeson
@@ -44,6 +43,7 @@ library
                      , postgresql-simple-url
                      , random
                      , resource-pool
+                     , resourcet
                      , stm
                      , streaming
                      , text
@@ -73,6 +73,7 @@ executable dispenser-server
                   , postgresql-simple-url
                   , random
                   , resource-pool
+                  , resourcet
                   , stm
                   , streaming
                   , text
@@ -106,6 +107,7 @@ test-suite dispenser-test
                      , postgresql-simple-url
                      , random
                      , resource-pool
+                     , resourcet
                      , stm
                      , streaming
                      , text

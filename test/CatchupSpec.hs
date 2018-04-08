@@ -26,12 +26,12 @@ spec = describe "Catchup" $ do
       let testStream = makeTestStream batchSize 3
 
       it "should be able to take the first 2 immediately" $ do
-        stream <- S.take 2 . snd <$> testStream
+        stream <- S.take 2 . snd <$> runResourceT testStream
         xs <- S.fst' <$> S.toList stream
         map (view eventData) xs `shouldBe` map TestEvent [1..2]
 
       it "should be able to take 5 if two more are posted asynchronously" $ do
-        (conn, stream) <- testStream
+        (conn, stream) <- runResourceT testStream
         void . forkIO $ do
           sleep 0.05
           postTestEvent conn 4
@@ -47,21 +47,26 @@ spec = describe "Catchup" $ do
       let testStream = makeTestStream batchSize 20
 
       it "should be able to take all 20" $ do
-        stream <- S.take 20 . snd <$> testStream
+        stream <- S.take 20 . snd <$> runResourceT testStream
         xs <- S.fst' <$> S.toList stream
         map (view eventData) xs `shouldBe` map TestEvent [1..20]
 
       it "should be able to take 25 if 5 are posted asynchronously" $ do
-        (conn, stream) <- testStream
-        void . forkIO $ mapM_ ((sleep 0.05 >>) . postTestEvent conn) [21..25]
+        (conn, stream) <- runResourceT testStream
+        void . forkIO $ mapM_ ((sleep 0.05 >>) . postTestEvent conn) [21..25
+                                                                                    ]
         let stream' = S.take 25 stream
         xs <- S.fst' <$> S.toList stream'
         map (view eventData) xs `shouldBe` map TestEvent [1..25]
 
-makeTestStream :: EventData a
-               => BatchSize -> Int -> IO (PGConnection, Stream (Of (Event a)) IO r)
+makeTestStream :: (EventData a, MonadIO m, MonadResource m)
+               => BatchSize -> Int -> m (PGConnection, Stream (Of (Event a)) IO r)
 makeTestStream batchSize n = do
-  conn <- createTestPartition
-  mapM_ (postTestEvent conn) [1..n]
-  (conn,) <$> fromZero conn batchSize
+  conn <- liftIO createTestPartition
+  mapM_ (liftIO . postTestEvent conn) [1..n]
+  let foo :: (EventData a, MonadIO m, MonadResource m)
+          => m (PGConnection, Stream (Of (Event a)) m r)
+      foo = (conn,) <$> fromZero conn batchSize
+  return undefined
+
 

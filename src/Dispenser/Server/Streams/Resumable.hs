@@ -12,7 +12,6 @@ module Dispenser.Server.Streams.Resumable
 import           Dispenser.Server.Prelude
 import qualified Streaming.Prelude                as S
 
-import           Data.Pool                             ( takeResource )
 import           Data.String                           ( fromString )
 import           Data.Text                             ( unlines
                                                        , unpack

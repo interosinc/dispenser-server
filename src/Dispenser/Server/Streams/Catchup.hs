@@ -13,7 +13,7 @@ import           Dispenser.Server.Partition
 import           Dispenser.Server.Streams.Event
 import           Streaming
 
-fromEventNumber :: forall m a r. (EventData a, MonadIO m)
+fromEventNumber :: forall m a r. (EventData a, MonadIO m, MonadResource m)
                 => PGConnection -> EventNumber -> BatchSize
                 -> m (Stream (Of (Event a)) m r)
 fromEventNumber conn = Catchup.make $ Catchup.Config
@@ -25,7 +25,7 @@ fromEventNumber conn = Catchup.make $ Catchup.Config
 
 -- TODO: make this generic over some class that fromEventNumber is in
 -- TODO: see also Ebb.hs
-fromZero :: (EventData a, MonadIO m)
+fromZero :: (EventData a, MonadIO m, MonadResource m)
          => PGConnection -> BatchSize
          -> m (Stream (Of (Event a)) m r)
 fromZero conn = fromEventNumber conn (EventNumber 0)

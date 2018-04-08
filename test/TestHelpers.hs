@@ -68,7 +68,10 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url of
             |]
 
 postTestEvent :: PGConnection -> Int -> IO ()
-postTestEvent conn = (void . wait =<<) .postEvent conn [StreamName "test"] . TestInt
+postTestEvent conn = (void . wait =<<)
+  . runResourceT
+  . postEvent conn [StreamName "test"]
+  . TestInt
 
 sleep :: MonadIO m => Float -> m ()
 sleep n = liftIO . threadDelay . round $ n * 1000 * 1000
