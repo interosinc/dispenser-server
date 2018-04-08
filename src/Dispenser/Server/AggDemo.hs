@@ -6,7 +6,9 @@
 
 module Dispenser.Server.AggDemo where
 
-import           Dispenser.Prelude
+import           Dispenser.Server.Prelude
+
+import Control.Monad.Trans.Resource (MonadResource, ResourceT)
 
 import           Data.Aeson
 import qualified Data.Map.Strict                      as Map
@@ -22,6 +24,7 @@ import           Dispenser.Server.Partition                  ( pgConnect
                                                              , recreate
                                                              )
 import           Dispenser.Types
+import Streaming (runResourceT)
 
 data DemoEvent
   = MessageEvent Text
@@ -57,14 +60,16 @@ demo msg = do
   putLn "AggDemo"
   conn <- pgConnect demoPartition (PoolSize 10)
   putLn "Connected."
-  agg :: Aggregate IO DemoEvent WordCounts WordCounts <- Agg.create conn id aggFold
+  -- agg :: (Aggregate IO DemoEvent WordCounts WordCounts)
+  agg :: (Aggregate IO DemoEvent WordCounts WordCounts) <-
+              Agg.create conn id aggFold
   putLn "Aggregate created."
-  snapshot0 :: WordCounts <- currentSnapshot agg
+  snapshot0 :: WordCounts <- liftIO $ currentSnapshot agg
   putLn $ "Before: " <> show snapshot0
   -- TODO: do this via command to aggregate instead of backdoor postEvent
-  void . wait =<< postEvent conn streamNames (MessageEvent . toLower $ msg)
-  threadDelay $ 250 * 1000
-  snapshot1 :: WordCounts <- currentSnapshot agg
+  liftIO $ void . wait =<< postEvent conn streamNames (MessageEvent . toLower $ msg)
+  liftIO . threadDelay $ 250 * 1000
+  snapshot1 :: WordCounts <- liftIO $ currentSnapshot agg
   putLn $ "After: " <> show snapshot1
   where
     id        = AggregateId "demoAgg1"
@@ -87,7 +92,7 @@ demo msg = do
 postMessage :: Text -> IO ()
 postMessage msg = do
   conn <- pgConnect demoPartition (PoolSize 10)
-  void $ postEvent conn streamNames e
+  void . runResourceT $ postEvent conn streamNames e
   where
     e :: DemoEvent
     e = MessageEvent msg

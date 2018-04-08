@@ -41,7 +41,7 @@ createOffsetsTable conn = withResource (conn ^. pool) $ \dbConn ->
     , "  )"
     ]
 
-resume :: (EventData a, MonadIO m)
+resume :: (EventData a, MonadIO m, MonadResource m)
        => OffsetName -> BatchSize -> PGConnection -> m (Stream (Of (Event a)) m r)
 resume name batchSize conn = do
   eventNum <- fromMaybe (EventNumber 0) <$> retrieveOffset conn name

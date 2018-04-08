@@ -54,20 +54,23 @@ currentSnapshot :: MonadIO m => Aggregate m a x b -> m b
 currentSnapshot agg = (liftIO . atomically . readTVar $ agg ^. snapshotVar)
   >>= (agg ^.  extract) . view state
 
-create :: forall m a x b. (EventData a, FromField x, MonadIO m, MonadBaseControl IO m)
+-- TODO: eliminate MonadResource constraint by proper lifting/interleaving within
+create :: forall m a x b.
+          (EventData a, FromField x, MonadIO m, MonadBaseControl IO m, MonadResource m)
        => PGConnection -> AggregateId -> AggFold m a x b
        -> m (Aggregate m a x b)
-create conn id aggFold = do
+create conn id aggFold = runResourceT $ do
   debug $ "Aggregates.create, id=" <> show id
-  liftIO (latestSnapshot conn id) >>= \case
+  snapshotMay :: Maybe (Snapshot x) <- latestSnapshot conn id
+  case snapshotMay of
     Just snapshot' -> do
       debug "snapshotMay.Just"
-      fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
+      lift $ fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
         >>= startFrom snapshot'
     Nothing -> do
       debug "snapshotMay.Nothing"
-      initSnapshot <- Snapshot (EventNumber (-1)) <$> initial'
-      fromZero conn batchSize >>= startFrom initSnapshot
+      initSnapshot :: Snapshot x <- lift (Snapshot (EventNumber (-1)) <$> initial')
+      lift $ startFrom initSnapshot =<< fromZero conn batchSize
   where
     batchSize = BatchSize 100 -- TODO
     AggFold step' initial' ex' = aggFold
@@ -115,8 +118,9 @@ forkUpdater aggFold var =
 
     AggFold _step' _initial' _ex' = aggFold
 
-latestSnapshot :: FromField x => PGConnection -> AggregateId -> IO (Maybe (Snapshot x))
-latestSnapshot conn (AggregateId id) = withResource (conn ^. pool) $ \dbConn ->
+latestSnapshot :: (MonadIO m, MonadResource m)
+               => FromField x => PGConnection -> AggregateId -> m (Maybe (Snapshot x))
+latestSnapshot conn (AggregateId id) = liftIO . withResource (conn ^. pool) $ \dbConn ->
   -- TODO: One problem is that if the below fails then it will appear as if
   --       there is no snapshot and the aggregate will restart... which would
   --       potentially cause monadic effects to re-trigger, etc.  we should
