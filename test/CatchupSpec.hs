@@ -1,8 +1,8 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 module CatchupSpec where
 
