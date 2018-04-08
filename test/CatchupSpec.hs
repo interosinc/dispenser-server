@@ -27,7 +27,7 @@ spec = describe "Catchup" $ do
 
       it "should be able to take the first 2 immediately" $ do
         stream <- S.take 2 . snd <$> runResourceT testStream
-        xs <- S.fst' <$> S.toList stream
+        xs <- runResourceT (S.fst' <$> S.toList stream)
         map (view eventData) xs `shouldBe` map TestEvent [1..2]
 
       it "should be able to take 5 if two more are posted asynchronously" $ do
@@ -40,7 +40,7 @@ spec = describe "Catchup" $ do
           sleep 0.05
           postTestEvent conn 6
         let stream' = S.take 5 stream
-        xs <- S.fst' <$> S.toList stream'
+        xs <- runResourceT (S.fst' <$> S.toList stream')
         map (view eventData) xs `shouldBe` map TestEvent [1..5]
 
     context "given a stream with 20 events in it" $ do
@@ -48,7 +48,7 @@ spec = describe "Catchup" $ do
 
       it "should be able to take all 20" $ do
         stream <- S.take 20 . snd <$> runResourceT testStream
-        xs <- S.fst' <$> S.toList stream
+        xs <- runResourceT (S.fst' <$> S.toList stream)
         map (view eventData) xs `shouldBe` map TestEvent [1..20]
 
       it "should be able to take 25 if 5 are posted asynchronously" $ do
@@ -56,17 +56,12 @@ spec = describe "Catchup" $ do
         void . forkIO $ mapM_ ((sleep 0.05 >>) . postTestEvent conn) [21..25
                                                                                     ]
         let stream' = S.take 25 stream
-        xs <- S.fst' <$> S.toList stream'
+        xs <- runResourceT (S.fst' <$> S.toList stream')
         map (view eventData) xs `shouldBe` map TestEvent [1..25]
 
 makeTestStream :: (EventData a, MonadIO m, MonadResource m)
-               => BatchSize -> Int -> m (PGConnection, Stream (Of (Event a)) IO r)
+               => BatchSize -> Int -> m (PGConnection, Stream (Of (Event a)) m r)
 makeTestStream batchSize n = do
   conn <- liftIO createTestPartition
   mapM_ (liftIO . postTestEvent conn) [1..n]
-  let foo :: (EventData a, MonadIO m, MonadResource m)
-          => m (PGConnection, Stream (Of (Event a)) m r)
-      foo = (conn,) <$> fromZero conn batchSize
-  return undefined
-
-
+  (conn,) <$> fromZero conn batchSize
