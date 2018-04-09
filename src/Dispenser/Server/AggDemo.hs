@@ -59,36 +59,38 @@ demo :: Text -> IO ()
 demo msg = do
   putLn "AggDemo"
   conn <- pgConnect demoPartition (PoolSize 10)
-  putLn "Connected."
-  -- agg :: (Aggregate IO DemoEvent WordCounts WordCounts)
-  agg <- Agg.create conn id aggFold
-  -- agg :: (Aggregate IO DemoEvent WordCounts WordCounts) <-
-  --             Agg.create conn id aggFold
-  putLn "Aggregate created."
-  snapshot0 :: WordCounts <- liftIO $ currentSnapshot agg
-  putLn $ "Before: " <> show snapshot0
-  -- TODO: do this via command to aggregate instead of backdoor postEvent
-  liftIO $ void . wait =<< postEvent conn streamNames (MessageEvent . toLower $ msg)
-  liftIO . threadDelay $ 250 * 1000
-  snapshot1 :: WordCounts <- liftIO $ currentSnapshot agg
-  putLn $ "After: " <> show snapshot1
-  where
-    id        = AggregateId "demoAgg1"
-    aggFold   = AggFold step' initial' extract'
+  panic "demo not impl"
 
-    streamNames = []
+--   putLn "Connected."
+--   -- agg :: (Aggregate IO DemoEvent WordCounts WordCounts)
+--   agg <- Agg.create conn id aggFold
+--   -- agg :: (Aggregate IO DemoEvent WordCounts WordCounts) <-
+--   --             Agg.create conn id aggFold
+--   putLn "Aggregate created."
+--   snapshot0 :: WordCounts <- liftIO $ currentSnapshot agg
+--   putLn $ "Before: " <> show snapshot0
+--   -- TODO: do this via command to aggregate instead of backdoor postEvent
+--   liftIO $ void . wait =<< postEvent conn streamNames (MessageEvent . toLower $ msg)
+--   liftIO . threadDelay $ 250 * 1000
+--   snapshot1 :: WordCounts <- liftIO $ currentSnapshot agg
+--   putLn $ "After: " <> show snapshot1
+--   where
+--     id        = AggregateId "demoAgg1"
+--     aggFold   = AggFold step' initial' extract'
 
-    step' :: WordCounts -> DemoEvent -> IO WordCounts
-    step' (WordCounts m) (MessageEvent txt) = return . WordCounts $ foldr f z xs
-      where
-        f :: Text -> Map Text Int -> Map Text Int
-        f word = Map.insertWith (+) word 1
+--     streamNames = []
 
-        z  = m
-        xs = words . toLower $ txt
+--     step' :: WordCounts -> DemoEvent -> IO WordCounts
+--     step' (WordCounts m) (MessageEvent txt) = return . WordCounts $ foldr f z xs
+--       where
+--         f :: Text -> Map Text Int -> Map Text Int
+--         f word = Map.insertWith (+) word 1
 
-    initial'  = return $ WordCounts Map.empty
-    extract'  = return
+--         z  = m
+--         xs = words . toLower $ txt
+
+--     initial'  = return $ WordCounts Map.empty
+--     extract'  = return
 
 postMessage :: Text -> IO ()
 postMessage msg = do
