@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -56,25 +57,63 @@ currentSnapshot agg = (liftIO . atomically . readTVar $ agg ^. snapshotVar)
 
 -- TODO: eliminate MonadResource constraint by proper lifting/interleaving within
 create :: forall m a x b.
-          (EventData a, FromField x, MonadIO m, MonadBaseControl IO m, MonadResource m)
+          (EventData a, FromField x, MonadIO m, MonadBaseControl IO m
+          , MonadThrow m)
        => PGConnection -> AggregateId -> AggFold m a x b
        -> m (Aggregate m a x b)
-create conn id aggFold = runResourceT $ do
+create conn id aggFold = join . runResourceT $ do
   debug $ "Aggregates.create, id=" <> show id
   snapshotMay :: Maybe (Snapshot x) <- latestSnapshot conn id
   case snapshotMay of
     Just snapshot' -> do
       debug "snapshotMay.Just"
-      lift $ fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
-        >>= startFrom snapshot'
+      --foo :: Stream (Of (Event a)) (ResourceT m) r
+      -- foo :: Stream (Of (Event a)) m r
+      --         <- lift $ fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
+      let foo = undefined
+      let _ = foo :: Stream (Of (Event a)) m r
+      return $ startFrom snapshot' foo
+      -- lift $ fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
+      --   >>= startFrom snapshot'
     Nothing -> do
       debug "snapshotMay.Nothing"
       initSnapshot :: Snapshot x <- lift (Snapshot (EventNumber (-1)) <$> initial')
-      lift $ startFrom initSnapshot =<< fromZero conn batchSize
+
+      let _ = initial' :: m x
+
+      let start :: Stream (Of (Event a)) m r -> m (Aggregate m a x b)
+          start = startFrom initSnapshot
+
+      let fz :: MonadResource m => m (Stream (Of (Event a)) m r)
+          fz = fromZero conn batchSize
+
+      sp :: Stream (Of (Event a)) m r <- undefined
+
+      -- res :: Aggregate m a x b <- undefined -- return $ start sp
+      -- res
+
+      let blah :: m (Aggregate m a x b)
+          blah = undefined
+
+      return blah
+
+      -- foo :: Aggregate m a x b <- (startFrom initSnapshot) =<< (lift $ fromZero conn batchSize)
+      --undefined
+
+      -- bar :: Stream (Of (Event a)) (ResourceT m) r <- fromZero conn batchSize
+
+      -- startFrom initSnapshot bar
+
+--      foo :: Aggregate m a x b <- lift $ startFrom initSnapshot bar
+      -- foo :: Stream (Of (Event a)) m r <- lift $
+      -- foo :: Stream (Of (Event a)) m r <- lift $ startFrom initSnapshot
+      --fromZero conn batchSize foo
+      -- undefined
   where
     batchSize = BatchSize 100 -- TODO
     AggFold step' initial' ex' = aggFold
 
+    startFrom :: Snapshot x -> Stream (Of (Event a)) m r -> m (Aggregate m a x b)
     startFrom snapshot' stream = do
       var <- liftIO . atomically . newTVar $ snapshot'
       forkUpdater aggFold var stream

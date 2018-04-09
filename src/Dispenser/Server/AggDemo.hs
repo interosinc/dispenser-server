@@ -61,8 +61,9 @@ demo msg = do
   conn <- pgConnect demoPartition (PoolSize 10)
   putLn "Connected."
   -- agg :: (Aggregate IO DemoEvent WordCounts WordCounts)
-  agg :: (Aggregate IO DemoEvent WordCounts WordCounts) <-
-              Agg.create conn id aggFold
+  agg <- Agg.create conn id aggFold
+  -- agg :: (Aggregate IO DemoEvent WordCounts WordCounts) <-
+  --             Agg.create conn id aggFold
   putLn "Aggregate created."
   snapshot0 :: WordCounts <- liftIO $ currentSnapshot agg
   putLn $ "Before: " <> show snapshot0
