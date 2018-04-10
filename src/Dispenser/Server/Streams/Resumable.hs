@@ -29,10 +29,10 @@ data PartitionOffset = PartitionOffset
   , _eventNumber :: EventNumber
   } deriving (Eq, Generic, Ord, Read, Show)
 
-offsetTableName :: PGConnection -> Text
+offsetTableName :: PGConnection a -> Text
 offsetTableName conn = unPartitionName (conn ^. partitionName) <> "_offsets"
 
-createOffsetsTable :: PGConnection -> IO ()
+createOffsetsTable :: PGConnection a -> IO ()
 createOffsetsTable conn = withResource (conn ^. pool) $ \dbConn ->
   void . execute_ dbConn . fromString . unpack . unlines $
     [ "CREATE TABLE " <> offsetTableName conn
@@ -42,7 +42,7 @@ createOffsetsTable conn = withResource (conn ^. pool) $ \dbConn ->
     ]
 
 resume :: (EventData a, MonadIO m, MonadResource m)
-       => OffsetName -> BatchSize -> PGConnection -> m (Stream (Of (Event a)) m r)
+       => OffsetName -> BatchSize -> PGConnection a -> m (Stream (Of (Event a)) m r)
 resume name batchSize conn = do
   eventNum <- fromMaybe (EventNumber 0) <$> retrieveOffset conn name
   catchupStream <- fromEventNumber conn eventNum batchSize
@@ -50,7 +50,7 @@ resume name batchSize conn = do
 
 recordOffsets :: (EventData a, MonadIO m)
               => OffsetName
-              -> PGConnection
+              -> PGConnection a
               -> Stream (Of (Event a)) m r
               -> m (Stream (Of (Event a)) m r)
 recordOffsets (OffsetName offsetName') conn stream = do
@@ -77,7 +77,7 @@ recordOffsets (OffsetName offsetName') conn stream = do
 
         tname = offsetTableName conn
 
-retrieveOffset :: MonadIO m => PGConnection -> OffsetName -> m (Maybe EventNumber)
+retrieveOffset :: MonadIO m => PGConnection a -> OffsetName -> m (Maybe EventNumber)
 retrieveOffset conn name = liftIO . withResource (conn ^. pool) $ \dbConn ->
   query dbConn q params >>= \case
     [Only n] -> return $ Just n

@@ -1,4 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -7,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NoImplicitPrelude      #-}
 {-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TemplateHaskell        #-}
 
@@ -59,7 +59,7 @@ currentSnapshot agg = (liftIO . atomically . readTVar $ agg ^. snapshotVar)
 create :: forall m a x b.
           (EventData a, FromField x, MonadIO m, MonadBaseControl IO m
           , MonadThrow m)
-       => PGConnection -> AggregateId -> AggFold m a x b
+       => PGConnection a -> AggregateId -> AggFold m a x b
        -> m (Aggregate m a x b)
 create conn id aggFold = join . runResourceT $ do
   debug $ "Aggregates.create, id=" <> show id
@@ -81,13 +81,13 @@ create conn id aggFold = join . runResourceT $ do
 
       let _ = initial' :: m x
 
-      let start :: Stream (Of (Event a)) m r -> m (Aggregate m a x b)
-          start = startFrom initSnapshot
+      let _start :: Stream (Of (Event a)) m r -> m (Aggregate m a x b)
+          _start = startFrom initSnapshot
 
-      let fz :: MonadResource m => m (Stream (Of (Event a)) m r)
-          fz = fromZero conn batchSize
+      let _fz :: MonadResource m => m (Stream (Of (Event a)) m r)
+          _fz = fromZero conn batchSize
 
-      sp :: Stream (Of (Event a)) m r <- undefined
+      _sp :: Stream (Of (Event a)) m r <- undefined
 
       -- res :: Aggregate m a x b <- undefined -- return $ start sp
       -- res
@@ -119,7 +119,7 @@ create conn id aggFold = join . runResourceT $ do
       forkUpdater aggFold var stream
       return $ Aggregate id ex' initial' var step'
 
-createAggTable :: PGConnection -> IO ()
+createAggTable :: PGConnection a -> IO ()
 createAggTable conn = withResource (conn ^. pool) $ \dbConn -> do
   createTable dbConn
   createIndexes dbConn
@@ -136,7 +136,7 @@ createAggTable conn = withResource (conn ^. pool) $ \dbConn -> do
 
     createIndexes = const $ return () -- TODO
 
-dropAggTable :: PGConnection -> IO ()
+dropAggTable :: PGConnection a -> IO ()
 dropAggTable conn = withResource (conn ^. pool) $ \dbConn ->
   runSQL dbConn $ "DROP TABLE IF EXISTS " <> snapshotTableName conn
 
@@ -158,7 +158,7 @@ forkUpdater aggFold var =
     AggFold _step' _initial' _ex' = aggFold
 
 latestSnapshot :: (MonadIO m, MonadResource m)
-               => FromField x => PGConnection -> AggregateId -> m (Maybe (Snapshot x))
+               => FromField x => PGConnection a -> AggregateId -> m (Maybe (Snapshot x))
 latestSnapshot conn (AggregateId id) = liftIO . withResource (conn ^. pool) $ \dbConn ->
   -- TODO: One problem is that if the below fails then it will appear as if
   --       there is no snapshot and the aggregate will restart... which would
@@ -176,12 +176,12 @@ latestSnapshot conn (AggregateId id) = liftIO . withResource (conn ^. pool) $ \d
           ]
     params = Only id
 
-recreateAggTable :: PGConnection -> IO ()
+recreateAggTable :: PGConnection a -> IO ()
 recreateAggTable conn = do
   dropAggTable conn
   createAggTable conn
 
-snapshotTableName :: PGConnection -> Text
+snapshotTableName :: PGConnection a -> Text
 snapshotTableName conn = partName <> "_aggregates"
   where
     partName = unPartitionName $ conn ^. (connectedPartition . partitionName)

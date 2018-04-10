@@ -1,10 +1,13 @@
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE InstanceSigs        #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE InstanceSigs           #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE NoImplicitPrelude      #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TemplateHaskell        #-}
 
 module Dispenser.Server.Partition
      ( module Exports
@@ -41,23 +44,23 @@ import           Dispenser.Server.Orphans                                  ()
 import           Dispenser.Types                         as Exports
 import           Streaming
 
-data PGConnection = PGConnection
+data PGConnection a = PGConnection
   { _connectedPartition :: Partition
   , _pool               :: Pool Connection
   } deriving (Generic)
 
 makeClassy ''PGConnection
 
-instance HasPartition PGConnection where
+instance HasPartition (PGConnection a) where
   partition = connectedPartition
 
 newtype PushEvent a = PushEvent { unEvent :: Event a }
   deriving (Eq, Ord, Read, Show)
 
 -- TODO: `Foldable a` instead of `[a]`?
-instance PartitionConnection PGConnection where
+instance PartitionConnection PGConnection a where
   appendEvents :: (EventData a, MonadIO m, MonadResource m)
-               => PGConnection -> [StreamName] -> NonEmptyBatch a
+               => PGConnection a -> [StreamName] -> NonEmptyBatch a
                -> m (Async EventNumber)
   appendEvents conn streamNames (NonEmptyBatch b) =
     liftIO . async . withResource (conn ^. pool) $ \dbConn ->
@@ -74,7 +77,7 @@ instance PartitionConnection PGConnection where
            <> " RETURNING event_number"
 
   fromNow :: (EventData a, MonadIO m, MonadResource m)
-          => PGConnection -> [StreamName]
+          => PGConnection a -> [StreamName]
           -> m (Stream (Of (Event a)) m r)
   fromNow conn _streamNames = do
     debug $ "Dispenser.Server.Partition: fromNow, streamNames=" <> show _streamNames
@@ -107,10 +110,7 @@ instance PartitionConnection PGConnection where
       deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
 
   rangeStream :: (EventData a, MonadIO m, MonadResource m)
-              => PGConnection
-              -> BatchSize
-              -> [StreamName]
-              -> (EventNumber, EventNumber)
+              => PGConnection a -> BatchSize -> [StreamName] -> (EventNumber, EventNumber)
               -> m (Stream (Of (Event a)) m ())
   rangeStream conn batchSize streamNames (minNum, maxNum)
     | maxNum < minNum        = do
@@ -142,11 +142,11 @@ instance PartitionConnection PGConnection where
         <> " -- "
         <> show msg
 
-pgConnect :: Partition -> PoolSize -> IO PGConnection
+pgConnect :: Partition -> PoolSize -> IO (PGConnection a)
 pgConnect part (PoolSize size) =
   PGConnection part <$> poolFromUrl (part ^. dbUrl) (fromIntegral size)
 
-create :: PGConnection -> IO ()
+create :: PGConnection a -> IO ()
 create conn = withResource (conn ^. pool) $ \dbConn -> do
   -- TODO: tx
   createTable           dbConn
@@ -186,7 +186,7 @@ create conn = withResource (conn ^. pool) $ \dbConn -> do
       where
         triggerName = table <> "_stream_trig"
 
-currentEventNumber :: PGConnection -> IO EventNumber
+currentEventNumber :: PGConnection a -> IO EventNumber
 currentEventNumber conn = withResource (conn ^. pool) $ \dbConn -> do
   [Only n] <- query_ dbConn q
   return $ EventNumber n
@@ -194,14 +194,14 @@ currentEventNumber conn = withResource (conn ^. pool) $ \dbConn -> do
     q = fromString . unpack $ "SELECT COALESCE(MAX(event_number), -1) FROM " <> tn
     PartitionName tn = conn ^. partitionName
 
-drop :: PGConnection -> IO ()
+drop :: PGConnection a -> IO ()
 drop partConn = withResource (partConn ^. pool) $ \conn -> do
   runSQL conn $ "DROP TABLE IF EXISTS " <> table
   runSQL conn $ "DROP FUNCTION IF EXISTS stream_" <> table <> "_events() CASCADE"
   where
     table = unPartitionName $ partConn ^. partitionName
 
-recreate :: PGConnection -> IO ()
+recreate :: PGConnection a -> IO ()
 recreate conn = do
   drop conn
   create conn
@@ -212,7 +212,8 @@ partitionNameToChannelName = (<> "_stream")
 -- Right now there is no limit on batch size... so obviously we should uh... do
 -- something about that.
 pgReadBatchFrom :: EventData a
-                => EventNumber -> BatchSize -> PGConnection -> IO (Async (Batch (Event a)))
+                => EventNumber -> BatchSize -> PGConnection a
+                -> IO (Async (Batch (Event a)))
 pgReadBatchFrom (EventNumber n) (BatchSize sz) conn
   | sz <= 0   = async (return $ Batch [])
   | otherwise = async $ withResource (conn ^. pool) $ \dbConn -> do
@@ -251,13 +252,13 @@ instance FromJSON a => FromJSON (PushEvent a) where
         Nothing -> fail $ "no '" <> unpack s <> "' field"
 
 takeConnection :: MonadResource m
-               => PGConnection -> m Connection
+               => PGConnection a -> m Connection
 takeConnection conn = do
   (dbConn, _localPool) <- takeConnectionLP conn
   return dbConn
 
 takeConnectionLP :: MonadResource m
-                 => PGConnection -> m (Connection, LocalPool Connection)
+                 => PGConnection a -> m (Connection, LocalPool Connection)
 takeConnectionLP conn = do
   (_key, x) <- allocate take' release'
   return x

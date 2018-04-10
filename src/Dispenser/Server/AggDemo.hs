@@ -8,8 +8,9 @@ module Dispenser.Server.AggDemo where
 
 import           Dispenser.Server.Prelude
 
-import Control.Monad.Trans.Resource (MonadResource, ResourceT)
-
+import           Control.Monad.Trans.Resource                ( MonadResource
+                                                             , ResourceT
+                                                             )
 import           Data.Aeson
 import qualified Data.Map.Strict                      as Map
 import           Data.Text                                   ( toLower
@@ -24,7 +25,7 @@ import           Dispenser.Server.Partition                  ( pgConnect
                                                              , recreate
                                                              )
 import           Dispenser.Types
-import Streaming (runResourceT)
+import           Streaming                                   ( runResourceT )
 
 data DemoEvent
   = MessageEvent Text
