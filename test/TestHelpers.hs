@@ -72,6 +72,3 @@ postTestEvent conn = (void . wait =<<)
   . runResourceT
   . postEvent conn [StreamName "test"]
   . TestInt
-
-sleep :: MonadIO m => Float -> m ()
-sleep n = liftIO . threadDelay . round $ n * 1000 * 1000
