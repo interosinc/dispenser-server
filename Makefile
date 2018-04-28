@@ -15,6 +15,14 @@ dist-clean:
 hlint:
 	stack exec hlint .
 
+longboye-all:
+	longboye imports app
+	longboye imports src
+	longboye imports test
+	longboye pragmas app
+	longboye pragmas src
+	longboye pragmas test
+
 run:
 	stack exec $(STACK_ARGS) -- $(EXE) $(ARGS)
 
@@ -33,6 +41,7 @@ watch-test:
 b: build
 hl: hlint
 i: install
+lba: longboye-all
 r: run
 s: setup
 w: watch
