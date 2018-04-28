@@ -8,6 +8,7 @@ module EventStreamSpec
 
 import           Dispenser.Prelude
 import qualified Streaming.Prelude              as S
+
 import           Control.Monad.Trans.Resource
 import           Dispenser.Server.Streams.Event
 import           Dispenser.Types
