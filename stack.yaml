@@ -2,7 +2,9 @@ resolver: lts-9.21
 
 packages:
 - location: .
-- location: ../dispenser-core
+- location:
+    git: git@dispenser-core.github.com:SuperpowersCorp/dispenser-core.git
+    commit: 81753b5ba6dd9a86d7d5991a6e24b231e0568974
   extra-dep: true
 - location:
     git: git@focus-prelude.github.com:SuperpowersCorp/focus-prelude.git
