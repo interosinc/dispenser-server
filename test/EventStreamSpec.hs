@@ -8,7 +8,7 @@ module EventStreamSpec
 
 import           Dispenser.Prelude
 import qualified Streaming.Prelude              as S
-
+import           Control.Monad.Trans.Resource
 import           Dispenser.Server.Streams.Event
 import           Dispenser.Types
 import           Test.Hspec
@@ -26,8 +26,8 @@ currentStreamFromSpec = describe "currentStreamFrom" $ do
   context "given an empty partition" $ do
     it "should return ???" $ do
       conn <- createTestPartition
-      stream <- currentStreamFrom conn (EventNumber 0) (BatchSize 100) []
-      xs :: [Event TestEvent] <- S.fst' <$> S.toList stream
+      stream <- runResourceT $ currentStreamFrom conn (EventNumber 0) (BatchSize 100) []
+      xs :: [Event TestInt] <- runResourceT $ S.fst' <$> S.toList stream
       xs `shouldBe` []
   context "given a partition with events" $ do
     it "should return a stream of those events" $ do
@@ -36,6 +36,6 @@ currentStreamFromSpec = describe "currentStreamFrom" $ do
       postTestEvent conn 2
       postTestEvent conn 3
       sleep 0.25
-      stream <- currentStreamFrom conn (EventNumber 0) (BatchSize 100) []
-      xs :: [Event TestEvent] <- S.fst' <$> S.toList stream
-      map (view eventData) xs `shouldBe` [TestEvent 1, TestEvent 2, TestEvent 3]
+      stream <- runResourceT $ currentStreamFrom conn (EventNumber 0) (BatchSize 100) []
+      xs :: [Event TestInt] <- runResourceT $ S.fst' <$> S.toList stream
+      map (view eventData) xs `shouldBe` map TestInt [1..3]

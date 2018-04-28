@@ -18,16 +18,6 @@ import Dispenser.Server.Partition
 import Streaming
 import System.Random
 
-newtype TestEvent = TestEvent Int
-  deriving (Eq, Generic, Ord, Read, Show)
-
-instance FromJSON TestEvent
-instance ToJSON   TestEvent
-
-instance EventData TestEvent
-
-type TestStream a = Stream (Of (Event TestEvent)) IO a
-
 newtype TestInt = TestInt Int
   deriving (Eq, Generic, Ord, Read, Show)
 
@@ -35,7 +25,7 @@ instance FromJSON  TestInt
 instance ToJSON    TestInt
 instance EventData TestInt
 
-createTestPartition :: IO PGConnection
+createTestPartition :: IO (PGConnection TestInt)
 createTestPartition = do
   pname <- ("test_disp_" <>) . show <$> randomRIO (0, maxBound :: Int)
   conn <- pgConnect (Partition testDbUrl (PartitionName pname)) (PoolSize 5)
@@ -67,7 +57,7 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url of
               LIKE 'test_disp_%'
             |]
 
-postTestEvent :: PGConnection -> Int -> IO ()
+postTestEvent :: PGConnection TestInt -> Int -> IO ()
 postTestEvent conn = (void . wait =<<)
   . runResourceT
   . postEvent conn [StreamName "test"]
