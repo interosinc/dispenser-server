@@ -12,19 +12,18 @@
 
 module Dispenser.Server.Aggregates where
 
-import           Dispenser.Server.Prelude                hiding ( state )
-import qualified Streaming.Prelude                as S
+import           Dispenser.Server.Prelude           hiding ( state )
+import qualified Streaming.Prelude           as S
 
 import           Control.Concurrent.STM.TVar
-import           Control.Monad.Trans.Control                    ( liftBaseDiscard )
-import           Data.String                                    ( fromString )
-import           Data.Text                                      ( unlines
-                                                                , unpack
-                                                                )
-import           Dispenser.Server.Db                            ( runSQL )
-import           Dispenser.Server.Partition              hiding ( eventNumber )
-import qualified Dispenser.Server.Partition       as DSP
--- import           Dispenser.Server.Streams.Catchup
+import           Control.Monad.Trans.Control               ( liftBaseDiscard )
+import           Data.String                               ( fromString )
+import           Data.Text                                 ( unlines
+                                                           , unpack
+                                                           )
+import           Dispenser.Server.Db                       ( runSQL )
+import           Dispenser.Server.Partition         hiding ( eventNumber )
+import qualified Dispenser.Server.Partition  as DSP
 import           Streaming
 
 data Aggregate m a x b = Aggregate

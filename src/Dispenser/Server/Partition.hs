@@ -27,14 +27,14 @@ import qualified Streaming.Prelude                       as S
 import           Control.Monad.Fail                                        ( fail )
 import           Control.Monad.Trans.Resource                              ( allocate )
 import           Data.Aeson
+import qualified Data.ByteString.Lazy                    as Lazy
 import qualified Data.HashMap.Strict                     as HM
 import qualified Data.List                               as List
 import           Data.String                                               ( fromString )
-import           Database.PostgreSQL.Simple                                ( query_ )
-import qualified Data.ByteString.Lazy                    as Lazy
 import           Data.Text                                                 ( pack
                                                                            , unpack
                                                                            )
+import           Database.PostgreSQL.Simple                                ( query_ )
 import           Database.PostgreSQL.Simple.Notification
 import           Dispenser.Server.Db                                       ( poolFromUrl
                                                                            , runSQL
