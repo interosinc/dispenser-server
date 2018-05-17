@@ -17,7 +17,6 @@ module Dispenser.Server.Partition
      , drop
      , pool
      , pgConnect
-     , currentEventNumber
      , recreate
      , partitionNameToChannelName
      ) where
@@ -28,14 +27,14 @@ import qualified Streaming.Prelude                       as S
 import           Control.Monad.Fail                                        ( fail )
 import           Control.Monad.Trans.Resource                              ( allocate )
 import           Data.Aeson
-import qualified Data.ByteString.Lazy                    as Lazy
 import qualified Data.HashMap.Strict                     as HM
 import qualified Data.List                               as List
 import           Data.String                                               ( fromString )
+import           Database.PostgreSQL.Simple                                ( query_ )
+import qualified Data.ByteString.Lazy                    as Lazy
 import           Data.Text                                                 ( pack
                                                                            , unpack
                                                                            )
-import           Database.PostgreSQL.Simple                                ( query_ )
 import           Database.PostgreSQL.Simple.Notification
 import           Dispenser.Server.Db                                       ( poolFromUrl
                                                                            , runSQL
@@ -58,12 +57,12 @@ newtype PushEvent a = PushEvent { unEvent :: Event a }
   deriving (Eq, Ord, Read, Show)
 
 -- TODO: `Foldable a` instead of `[a]`?
-instance PartitionConnection PGConnection a where
+instance CanAppendEvents PGConnection a where
   appendEvents :: (EventData a, MonadIO m, MonadResource m)
                => PGConnection a -> [StreamName] -> NonEmptyBatch a
-               -> m (Async EventNumber)
+               -> m EventNumber
   appendEvents conn streamNames (NonEmptyBatch b) =
-    liftIO . async . withResource (conn ^. pool) $ \dbConn ->
+    liftIO . withResource (conn ^. pool) $ \dbConn ->
       List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
     where
       f :: Value -> (Value, [StreamName])
@@ -76,42 +75,10 @@ instance PartitionConnection PGConnection a where
            <> " VALUES (?, ?)"
            <> " RETURNING event_number"
 
-  fromNow :: (EventData a, MonadIO m, MonadResource m)
-          => PGConnection a -> [StreamName]
-          -> m (Stream (Of (Event a)) m r)
-  fromNow conn _streamNames = do
-    debug $ "Dispenser.Server.Partition: fromNow, streamNames=" <> show _streamNames
-    -- TODO: This will leak connections if an exception occurs.
-    --       conn should be destroyed or returned
-
-    dbConn <- takeConnection conn
-    -- (dbConn, _) <- liftIO $ takeResource (conn ^. pool)
-
-    debug $ "Listening for notifications on: " <> show channelText
-    void . liftIO . execute_ dbConn . fromString . unpack $ "LISTEN " <> channelText
-    debug "pushStream acquired connection"
-    return . forever $ do
-      debug "pushStream attempting to acquire notification"
-      n <- liftIO $ getNotification dbConn
-      debug $ "got notification: " <> show n
-      when (notificationChannel n == channelBytes) $ do
-        debug "notification was for the right channel!"
-        case deserializeNotificationEvent . notificationData $ n of
-          Left err -> panic $ "pushStream ERROR: " <> show err
-          Right e  -> do
-            debug $ "yielding event: " <> show e
-            S.yield e
-    where
-      channelBytes = encodeUtf8 channelText
-      channelText  = partitionNameToChannelName . unPartitionName
-        $ conn ^. partitionName
-
-      deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
-      deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
-
-  rangeStream :: (EventData a, MonadIO m, MonadResource m)
-              => PGConnection a -> BatchSize -> [StreamName] -> (EventNumber, EventNumber)
-              -> m (Stream (Of (Event a)) m ())
+instance CanRangeStream PGConnection e where
+  rangeStream :: (EventData e, MonadIO m, MonadResource m)
+              => PGConnection e -> BatchSize -> [StreamName] -> (EventNumber, EventNumber)
+              -> m (Stream (Of (Event e)) m ())
   rangeStream conn batchSize streamNames (minNum, maxNum)
     | maxNum < minNum        = do
         debugRangeStream streamNames (minNum, maxNum) "maxNum < minNum"
@@ -186,13 +153,13 @@ create conn = withResource (conn ^. pool) $ \dbConn -> do
       where
         triggerName = table <> "_stream_trig"
 
-currentEventNumber :: PGConnection a -> IO EventNumber
-currentEventNumber conn = withResource (conn ^. pool) $ \dbConn -> do
-  [Only n] <- query_ dbConn q
-  return $ EventNumber n
-  where
-    q = fromString . unpack $ "SELECT COALESCE(MAX(event_number), -1) FROM " <> tn
-    PartitionName tn = conn ^. partitionName
+instance CanCurrentEventNumber PGConnection e where
+  currentEventNumber conn = liftIO . withResource (conn ^. pool) $ \dbConn -> do
+    [Only n] <- query_ dbConn q
+    return $ EventNumber n
+    where
+      q = fromString . unpack $ "SELECT COALESCE(MAX(event_number), -1) FROM " <> tn
+      PartitionName tn = conn ^. partitionName
 
 drop :: PGConnection a -> IO ()
 drop partConn = withResource (partConn ^. pool) $ \conn -> do
@@ -268,3 +235,37 @@ takeConnectionLP conn = do
 
     release' :: (Connection, LocalPool Connection) -> IO ()
     release' (conn', localPool) = putResource localPool conn'
+
+
+  -- fromNow :: (EventData a, MonadIO m, MonadResource m)
+  --         => PGConnection a -> [StreamName]
+  --         -> m (Stream (Of (Event a)) m r)
+  -- fromNow conn _streamNames = do
+  --   debug $ "Dispenser.Server.Partition: fromNow, streamNames=" <> show _streamNames
+  --   -- TODO: This will leak connections if an exception occurs.
+  --   --       conn should be destroyed or returned
+
+  --   dbConn <- takeConnection conn
+  --   -- (dbConn, _) <- liftIO $ takeResource (conn ^. pool)
+
+  --   debug $ "Listening for notifications on: " <> show channelText
+  --   void . liftIO . execute_ dbConn . fromString . unpack $ "LISTEN " <> channelText
+  --   debug "pushStream acquired connection"
+  --   return . forever $ do
+  --     debug "pushStream attempting to acquire notification"
+  --     n <- liftIO $ getNotification dbConn
+  --     debug $ "got notification: " <> show n
+  --     when (notificationChannel n == channelBytes) $ do
+  --       debug "notification was for the right channel!"
+  --       case deserializeNotificationEvent . notificationData $ n of
+  --         Left err -> panic $ "pushStream ERROR: " <> show err
+  --         Right e  -> do
+  --           debug $ "yielding event: " <> show e
+  --           S.yield e
+  --   where
+  --     channelBytes = encodeUtf8 channelText
+  --     channelText  = partitionNameToChannelName . unPartitionName
+  --       $ conn ^. partitionName
+
+  --     deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
+  --     deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
