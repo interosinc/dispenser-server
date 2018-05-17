@@ -24,7 +24,7 @@ import           Data.Text                                      ( unlines
 import           Dispenser.Server.Db                            ( runSQL )
 import           Dispenser.Server.Partition              hiding ( eventNumber )
 import qualified Dispenser.Server.Partition       as DSP
-import           Dispenser.Server.Streams.Catchup
+-- import           Dispenser.Server.Streams.Catchup
 import           Streaming
 
 data Aggregate m a x b = Aggregate
@@ -86,6 +86,8 @@ create conn id aggFold = join . runResourceT $ do
 
       let _fz :: MonadResource m => m (Stream (Of (Event a)) m r)
           _fz = fromZero conn batchSize
+            where
+              fromZero = panic "no fromZero!"
 
       _sp :: Stream (Of (Event a)) m r <- undefined
 
