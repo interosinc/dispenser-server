@@ -24,9 +24,6 @@ library
                      , Dispenser.Server.Orphans
                      , Dispenser.Server.Partition
                      , Dispenser.Server.Prelude
-                     , Dispenser.Server.Streams.Catchup
-                     , Dispenser.Server.Streams.Event
-                     , Dispenser.Server.Streams.Resumable
                      , Dispenser.Server.Types
   build-depends:       aeson
                      , base  >= 4.7 && < 5
