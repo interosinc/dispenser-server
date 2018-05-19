@@ -1,9 +1,10 @@
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE QuasiQuotes         #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE QuasiQuotes           #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 
 module TestHelpers where
 
@@ -15,7 +16,6 @@ import Database.PostgreSQL.Simple       as PG
 import Database.PostgreSQL.Simple.SqlQQ
 import Database.PostgreSQL.Simple.URL
 import Dispenser.Server.Partition
-import Streaming
 import System.Random
 
 newtype TestInt = TestInt Int
@@ -24,6 +24,8 @@ newtype TestInt = TestInt Int
 instance FromJSON  TestInt
 instance ToJSON    TestInt
 instance EventData TestInt
+
+instance PartitionConnection PGConnection TestInt where
 
 createTestPartition :: IO (PGConnection TestInt)
 createTestPartition = do
@@ -58,7 +60,7 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url of
             |]
 
 postTestEvent :: PGConnection TestInt -> Int -> IO ()
-postTestEvent conn = (void . wait =<<)
+postTestEvent conn = void
   . runResourceT
   . postEvent conn [StreamName "test"]
   . TestInt

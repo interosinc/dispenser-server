@@ -50,7 +50,7 @@ data PGConnection a = PGConnection
 
 makeClassy ''PGConnection
 
-instance HasPartition (PGConnection a) where
+instance HasPartition (PGConnection e) where
   partition = connectedPartition
 
 newtype PushEvent a = PushEvent { unEvent :: Event a }

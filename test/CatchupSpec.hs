@@ -10,7 +10,7 @@ import           Dispenser.Server.Prelude
 import qualified Streaming.Prelude                as S
 
 import           Dispenser.Server.Partition
-import           Dispenser.Server.Streams.Catchup
+--import           Dispenser.Server.Streams.Catchup
 import           Streaming
 import           Test.Hspec
 import           TestHelpers
@@ -59,11 +59,12 @@ spec = describe "Catchup" $ do
         xs <- runResourceT (S.fst' <$> S.toList stream')
         map (view eventData) xs `shouldBe` map TestInt [1..25]
 
-makeTestStream :: (MonadIO m, MonadResource m)
-               => BatchSize -> Int -> m ( PGConnection TestInt
-                                        , Stream (Of (Event TestInt)) m r
-                                        )
+makeTestStream :: ( MonadIO m
+                  , MonadResource m
+                  )
+               => BatchSize -> Int
+               -> m (PGConnection TestInt, Stream (Of (Event TestInt)) m r)
 makeTestStream batchSize n = do
   conn <- liftIO createTestPartition
   mapM_ (liftIO . postTestEvent conn) [1..n]
-  (conn,) <$> fromZero conn batchSize
+  (conn,) <$> fromOne conn batchSize
