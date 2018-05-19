@@ -69,7 +69,7 @@ create conn id aggFold = join . runResourceT $ do
       --foo :: Stream (Of (Event a)) (ResourceT m) r
       -- foo :: Stream (Of (Event a)) m r
       --         <- lift $ fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
-      let foo = undefined
+      let foo = panic "foo undefined in Aggregates.create"
       let _ = foo :: Stream (Of (Event a)) m r
       return $ startFrom snapshot' foo
       -- lift $ fromEventNumber conn (succ $ snapshot' ^. eventNumber) batchSize
@@ -88,13 +88,13 @@ create conn id aggFold = join . runResourceT $ do
             where
               fromZero = panic "no fromZero!"
 
-      _sp :: Stream (Of (Event a)) m r <- undefined
+      _sp :: Stream (Of (Event a)) m r <- panic "_sp undefined in Aggregates.create"
 
       -- res :: Aggregate m a x b <- undefined -- return $ start sp
       -- res
 
       let blah :: m (Aggregate m a x b)
-          blah = undefined
+          blah = panic "blah undefined in Aggregates.create"
 
       return blah
 

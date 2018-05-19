@@ -12,6 +12,9 @@ clean:
 dist-clean:
 	\rm -rf .stack-work
 
+ghcid:
+	stack exec -- ghcid -c 'stack ghci' --restart stack.yaml
+
 hlint:
 	stack exec hlint .
 

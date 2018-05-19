@@ -8,24 +8,25 @@ module Dispenser.Server.AggDemo where
 
 import           Dispenser.Server.Prelude
 
-import           Control.Monad.Trans.Resource                ( MonadResource
-                                                             , ResourceT
-                                                             )
 import           Data.Aeson
-import qualified Data.Map.Strict                      as Map
-import           Data.Text                                   ( toLower
-                                                             , words
-                                                             )
 import           Database.PostgreSQL.Simple.FromField        ( FromField
                                                              , fromField
                                                              )
 import           Dispenser.Server.Aggregates
-import qualified Dispenser.Server.Aggregates          as Agg
 import           Dispenser.Server.Partition                  ( pgConnect
                                                              , recreate
                                                              )
 import           Dispenser.Types
 import           Streaming                                   ( runResourceT )
+
+-- import           Control.Monad.Trans.Resource                ( MonadResource
+--                                                              , ResourceT
+--                                                              )
+-- import qualified Data.Map.Strict                      as Map
+-- import           Data.Text                                   ( toLower
+--                                                              , words
+--                                                              )
+-- import qualified Dispenser.Server.Aggregates          as Agg
 
 data DemoEvent
   = MessageEvent Text
@@ -57,9 +58,9 @@ recreateDemo = do
   putLn "Recreating agg table..."
 
 demo :: Text -> IO ()
-demo msg = do
+demo _msg = do
   putLn "AggDemo"
-  conn <- pgConnect demoPartition (PoolSize 10)
+  _conn <- pgConnect demoPartition (PoolSize 10)
   panic "demo not impl"
 
 --   putLn "Connected."
