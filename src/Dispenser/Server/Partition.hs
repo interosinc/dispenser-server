@@ -36,6 +36,7 @@ import           Data.Text                                                 ( pac
                                                                            )
 import           Database.PostgreSQL.Simple                                ( query_ )
 import           Database.PostgreSQL.Simple.Notification
+import           Dispenser                                                 ( genericFromEventNumber )
 import           Dispenser.Server.Db                                       ( poolFromUrl
                                                                            , runSQL
                                                                            )
@@ -58,8 +59,8 @@ newtype PushEvent a = PushEvent { unEvent :: Event a }
 
 -- TODO: `Foldable a` instead of `[a]`?
 instance CanAppendEvents PGConnection a where
-  appendEvents :: (EventData a, MonadIO m, MonadResource m)
-               => PGConnection a -> [StreamName] -> NonEmptyBatch a
+  appendEvents :: (EventData e, MonadResource m)
+               => PGConnection e -> [StreamName] -> NonEmptyBatch e
                -> m EventNumber
   appendEvents conn streamNames (NonEmptyBatch b) =
     liftIO . withResource (conn ^. pool) $ \dbConn ->
@@ -110,12 +111,14 @@ instance CanRangeStream PGConnection e where
         <> show msg
 
 instance CanFromNow PGConnection e where
-  -- TODO: streamNames
   fromNow :: ( EventData e
              , MonadResource m
              )
-          => PGConnection e -> BatchSize -> m (Stream (Of (Event e)) m r)
-  fromNow conn batchSize = do
+          => PGConnection e -> BatchSize -> [StreamName]
+          -> m (Stream (Of (Event e)) m r)
+  fromNow conn batchSize _streamNames = do
+    -- TODO: filter by streamNames
+
     debug $ "Dispenser.Server.Partition: fromNow, batchSize=" <> show batchSize
     -- TODO: This will leak connections if an exception occurs.
     --       conn should be destroyed or returned
@@ -145,7 +148,7 @@ instance CanFromNow PGConnection e where
       deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
 
 instance CanFromEventNumber PGConnection e where
-  fromEventNumber = panic "fromEventNumber not impl for PGConnection"
+  fromEventNumber = genericFromEventNumber
 
 pgConnect :: Partition -> PoolSize -> IO (PGConnection a)
 pgConnect part (PoolSize size) =

@@ -17,8 +17,8 @@ library
   hs-source-dirs:      src
   ghc-options:         -Wall
   exposed-modules:     Dispenser.Server
-                     , Dispenser.Server.AggDemo
-                     , Dispenser.Server.Aggregates
+                     -- , Dispenser.Server.AggDemo
+                     -- , Dispenser.Server.Aggregates
                      , Dispenser.Server.Db
                      , Dispenser.Server.Main
                      , Dispenser.Server.Orphans
@@ -82,9 +82,9 @@ executable dispenser-server
 test-suite dispenser-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
-  other-modules:    CatchupSpec
-                  , EventStreamSpec
-                  , TestHelpers
+  other-modules:       EventStreamSpec
+                     , FromEventNumberSpec
+                     , ServerTestHelpers
   main-is:             Spec.hs
   build-depends:       QuickCheck
                      , aeson

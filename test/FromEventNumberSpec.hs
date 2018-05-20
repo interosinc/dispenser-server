@@ -4,22 +4,22 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 
-module CatchupSpec where
+module FromEventNumberSpec where
 
 import           Dispenser.Server.Prelude
 import qualified Streaming.Prelude                as S
 
+import           Dispenser
 import           Dispenser.Server.Partition
---import           Dispenser.Server.Streams.Catchup
 import           Streaming
 import           Test.Hspec
-import           TestHelpers
+import           ServerTestHelpers
 
 main :: IO ()
 main = hspec spec
 
 spec :: Spec
-spec = describe "Catchup" $ do
+spec = describe "FromEventNumber" $ do
   forM_ (map BatchSize [1..10]) $ \batchSize -> do
 
     context "given a stream with 3 events in it" $ do
@@ -67,4 +67,7 @@ makeTestStream :: ( MonadIO m
 makeTestStream batchSize n = do
   conn <- liftIO createTestPartition
   mapM_ (liftIO . postTestEvent conn) [1..n]
-  (conn,) <$> fromOne conn batchSize
+  (conn,) <$> fromOne conn batchSize testStreamNames
+
+testStreamNames :: [StreamName]
+testStreamNames = [StreamName "FromEventNumberSpec"]

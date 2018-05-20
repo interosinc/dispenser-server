@@ -10,9 +10,9 @@ module EventStreamSpec
 import           Dispenser.Prelude
 import qualified Streaming.Prelude              as S
 
-import           Dispenser.Types
+import           Dispenser
 import           Test.Hspec
-import           TestHelpers
+import           ServerTestHelpers
 
 main :: IO ()
 main = hspec spec
@@ -32,6 +32,7 @@ currentStreamFromSpec = describe "currentStreamFrom" $ do
       stream <- runResourceT $ currentStreamFrom conn batchSize streamNames (EventNumber 0)
       xs :: [Event TestInt] <- runResourceT $ S.fst' <$> S.toList stream
       xs `shouldBe` []
+
   context "given a partition with events" $ do
     it "should return a stream of those events" $ do
       conn <- createTestPartition

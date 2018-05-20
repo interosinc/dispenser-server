@@ -6,7 +6,7 @@
 {-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 
-module TestHelpers where
+module ServerTestHelpers where
 
 import Dispenser.Server.Prelude
 
@@ -15,6 +15,7 @@ import Data.Text                              ( unpack )
 import Database.PostgreSQL.Simple       as PG
 import Database.PostgreSQL.Simple.SqlQQ
 import Database.PostgreSQL.Simple.URL
+import Dispenser
 import Dispenser.Server.Partition
 import System.Random
 
