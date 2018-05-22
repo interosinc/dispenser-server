@@ -11,13 +11,16 @@
 
 module Dispenser.Server.Partition
      ( module Exports
+     , PGClient
      , PGConnection
      , connectedPartition
      , create
      , drop
+     , maxPoolSize
+     , new
      , pool
-     , pgConnect
      , recreate
+     , uRL
      , partitionNameToChannelName
      ) where
 
@@ -36,7 +39,9 @@ import           Data.Text                                                 ( pac
                                                                            )
 import           Database.PostgreSQL.Simple                                ( query_ )
 import           Database.PostgreSQL.Simple.Notification
-import           Dispenser                                                 ( genericFromEventNumber )
+import           Dispenser                                                 -- ( genericFromEventNumber
+                                                                           -- , connect
+                                                                           -- )
 import           Dispenser.Server.Db                                       ( poolFromUrl
                                                                            , runSQL
                                                                            )
@@ -44,12 +49,30 @@ import           Dispenser.Server.Orphans                                  ()
 import           Dispenser.Types                         as Exports
 import           Streaming
 
+data PGClient a = PGClient
+  { _pGClientMaxPoolSize :: Word
+  , _pGClientURL         :: Text
+  }
+
 data PGConnection a = PGConnection
-  { _connectedPartition :: Partition
-  , _pool               :: Pool Connection
+  { _pGConnectionConnectedPartition :: Partition
+  , _pGConnectionPool               :: Pool Connection
   } deriving (Generic)
 
-makeClassy ''PGConnection
+makeFields ''PGClient
+makeFields ''PGConnection
+
+new :: Word -> Text -> IO (PGClient a)
+new = (return .) . PGClient
+
+instance EventData e => Client (PGClient e) PGConnection e where
+  connect :: MonadIO m => PartitionName -> PGClient e -> m (PGConnection e)
+  connect partName client = do
+    let part = Partition (DatabaseURL $ client ^. uRL) partName
+    PGConnection part <$> liftIO
+      (poolFromUrl (part ^. dbUrl) (fromIntegral $ client ^. maxPoolSize))
+
+instance EventData e => PartitionConnection PGConnection e
 
 instance HasPartition (PGConnection e) where
   partition = connectedPartition
@@ -149,10 +172,6 @@ instance CanFromNow PGConnection e where
 
 instance CanFromEventNumber PGConnection e where
   fromEventNumber = genericFromEventNumber
-
-pgConnect :: Partition -> PoolSize -> IO (PGConnection a)
-pgConnect part (PoolSize size) =
-  PGConnection part <$> poolFromUrl (part ^. dbUrl) (fromIntegral size)
 
 create :: PGConnection a -> IO ()
 create conn = withResource (conn ^. pool) $ \dbConn -> do
