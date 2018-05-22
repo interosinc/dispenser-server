@@ -9,6 +9,8 @@ import Dispenser.Server.Partition as Exports ( PGClient
                                              , create
                                              , currentEventNumber
                                              , drop
+                                             , ensureExists
+                                             , exists
                                              , new
                                              , recreate
                                              )

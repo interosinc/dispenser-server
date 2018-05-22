@@ -15,6 +15,8 @@ module Dispenser.Server.Partition
      , PGConnection
      , connectedPartition
      , create
+     , ensureExists
+     , exists
      , drop
      , maxPoolSize
      , new
@@ -172,6 +174,23 @@ instance CanFromNow PGConnection e where
 
 instance CanFromEventNumber PGConnection e where
   fromEventNumber = genericFromEventNumber
+
+exists :: PGConnection a -> IO Bool
+exists conn = withResource (conn ^. pool) $ \dbConn-> do
+  [Only b] <- query_ dbConn . fromString . List.unlines $
+                [ "SELECT EXISTS ("
+                , "   SELECT 1"
+                , "   FROM   information_schema.tables"
+                , "   WHERE  table_schema = current_schema()"
+                , "   AND    table_name = '" ++ unpack table ++ "'"
+                , "   );"
+                ]
+  return b
+  where
+    table = unPartitionName $ conn ^. partitionName
+
+ensureExists :: PGConnection a -> IO ()
+ensureExists conn = exists conn >>= \b -> unless b $ create conn
 
 create :: PGConnection a -> IO ()
 create conn = withResource (conn ^. pool) $ \dbConn -> do
