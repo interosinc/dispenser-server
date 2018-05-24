@@ -63,7 +63,7 @@ makeTestStream :: ( MonadIO m
                   , MonadResource m
                   )
                => BatchSize -> Int
-               -> m (PGConnection TestInt, Stream (Of (Event TestInt)) m r)
+               -> m (PgConnection TestInt, Stream (Of (Event TestInt)) m r)
 makeTestStream batchSize n = do
   conn <- liftIO createTestPartition
   mapM_ (liftIO . postTestEvent conn) [1..n]

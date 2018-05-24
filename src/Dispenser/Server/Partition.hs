@@ -35,7 +35,9 @@ import           Data.Aeson
 import qualified Data.ByteString.Lazy                    as Lazy
 import qualified Data.HashMap.Strict                     as HM
 import qualified Data.List                               as List
-import           Data.String                                               ( fromString )
+import           Data.String                                               ( String
+                                                                           , fromString
+                                                                           )
 import           Data.Text                                                 ( pack
                                                                            , unpack
                                                                            )

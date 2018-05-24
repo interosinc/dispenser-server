@@ -15,7 +15,7 @@ import Data.Text                              ( unpack )
 import Database.PostgreSQL.Simple       as PG
 import Database.PostgreSQL.Simple.SqlQQ
 import Database.PostgreSQL.Simple.URL
-import Dispenser
+import Dispenser                        as D
 import Dispenser.Server.Partition
 import System.Random
 
@@ -26,21 +26,25 @@ instance FromJSON  TestInt
 instance ToJSON    TestInt
 instance EventData TestInt
 
-instance PartitionConnection PGConnection TestInt where
+instance PartitionConnection PgConnection TestInt where
 
-createTestPartition :: IO (PGConnection TestInt)
+createTestPartition :: IO (PgConnection TestInt)
 createTestPartition = do
   pname <- ("test_disp_" <>) . show <$> randomRIO (0, maxBound :: Int)
-  conn <- pgConnect (Partition testDbUrl (PartitionName pname)) (PoolSize 5)
+  client :: PgClient TestInt <- new poolMax url'
+  conn <- D.connect (PartitionName pname) client
   recreate conn
   return conn
+  where
+    DatabaseURL url' = testDbUrl
+    poolMax          = 5
 
 testDbUrl :: DatabaseURL
 testDbUrl = DatabaseURL "postgres://dispenser@localhost:5432/dispenser"
 
 deleteAllTestPartitions :: IO ()
-deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url of
-  Nothing -> panic $ "invalid database URL: " <> show url
+deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url' of
+  Nothing -> panic $ "invalid database URL: " <> show url'
   Just connectInfo -> do
     conn <- PG.connect connectInfo
     tableNames :: [Text] <- map fromOnly <$> query_ conn q
@@ -52,7 +56,7 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url of
       putLn $ "Deleting: " <> tableName
       void . execute_ conn . fromString . unpack $ "DROP TABLE " <> tableName
 
-    DatabaseURL url = testDbUrl
+    DatabaseURL url' = testDbUrl
     q = [sql| SELECT tablename
               FROM pg_tables
               WHERE tableowner = 'dispenser'
@@ -60,7 +64,7 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url of
               LIKE 'test_disp_%'
             |]
 
-postTestEvent :: PGConnection TestInt -> Int -> IO ()
+postTestEvent :: PgConnection TestInt -> Int -> IO ()
 postTestEvent conn = void
   . runResourceT
   . postEvent conn [StreamName "test"]

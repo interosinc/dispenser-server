@@ -31,7 +31,6 @@ library
                      , containers
                      , data-default
                      , dispenser-core
-                     , focus-prelude
                      , foldl
                      , lens
                      , monad-control
@@ -61,7 +60,6 @@ executable dispenser-server
                   , data-default
                   , dispenser-core
                   , dispenser-server
-                  , focus-prelude
                   , foldl
                   , lens
                   , monad-control
@@ -94,7 +92,6 @@ test-suite dispenser-test
                      , data-default
                      , dispenser-core
                      , dispenser-server
-                     , focus-prelude
                      , foldl
                      , hspec
                      , lens
