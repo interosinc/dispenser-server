@@ -11,8 +11,8 @@
 
 module Dispenser.Server.Partition
      ( module Exports
-     , PGClient
-     , PGConnection
+     , PgClient
+     , PgConnection
      , connectedPartition
      , create
      , ensureExists
@@ -22,7 +22,7 @@ module Dispenser.Server.Partition
      , new
      , pool
      , recreate
-     , uRL
+     , url
      , partitionNameToChannelName
      ) where
 
@@ -41,9 +41,9 @@ import           Data.Text                                                 ( pac
                                                                            )
 import           Database.PostgreSQL.Simple                                ( query_ )
 import           Database.PostgreSQL.Simple.Notification
-import           Dispenser                                                 -- ( genericFromEventNumber
-                                                                           -- , connect
-                                                                           -- )
+import           Dispenser                                                 ( genericFromEventNumber
+                                                                           , connect
+                                                                           )
 import           Dispenser.Server.Db                                       ( poolFromUrl
                                                                            , runSQL
                                                                            )
@@ -51,41 +51,41 @@ import           Dispenser.Server.Orphans                                  ()
 import           Dispenser.Types                         as Exports
 import           Streaming
 
-data PGClient a = PGClient
-  { _pGClientMaxPoolSize :: Word
-  , _pGClientURL         :: Text
+data PgClient a = PgClient
+  { _pgClientMaxPoolSize :: Word
+  , _pgClientUrl         :: Text
   }
 
-data PGConnection a = PGConnection
-  { _pGConnectionConnectedPartition :: Partition
-  , _pGConnectionPool               :: Pool Connection
+data PgConnection a = PgConnection
+  { _pgConnectionConnectedPartition :: Partition
+  , _pgConnectionPool               :: Pool Connection
   } deriving (Generic)
 
-makeFields ''PGClient
-makeFields ''PGConnection
+makeFields ''PgClient
+makeFields ''PgConnection
 
-new :: Word -> Text -> IO (PGClient a)
-new = (return .) . PGClient
+new :: Word -> Text -> IO (PgClient a)
+new = (return .) . PgClient
 
-instance EventData e => Client (PGClient e) PGConnection e where
-  connect :: MonadIO m => PartitionName -> PGClient e -> m (PGConnection e)
+instance EventData e => Client (PgClient e) PgConnection e where
+  connect :: MonadIO m => PartitionName -> PgClient e -> m (PgConnection e)
   connect partName client = do
-    let part = Partition (DatabaseURL $ client ^. uRL) partName
-    PGConnection part <$> liftIO
+    let part = Partition (DatabaseURL $ client ^. url) partName
+    PgConnection part <$> liftIO
       (poolFromUrl (part ^. dbUrl) (fromIntegral $ client ^. maxPoolSize))
 
-instance EventData e => PartitionConnection PGConnection e
+instance EventData e => PartitionConnection PgConnection e
 
-instance HasPartition (PGConnection e) where
+instance HasPartition (PgConnection e) where
   partition = connectedPartition
 
 newtype PushEvent a = PushEvent { unEvent :: Event a }
   deriving (Eq, Ord, Read, Show)
 
 -- TODO: `Foldable a` instead of `[a]`?
-instance CanAppendEvents PGConnection a where
+instance CanAppendEvents PgConnection a where
   appendEvents :: (EventData e, MonadResource m)
-               => PGConnection e -> [StreamName] -> NonEmptyBatch e
+               => PgConnection e -> [StreamName] -> NonEmptyBatch e
                -> m EventNumber
   appendEvents conn streamNames (NonEmptyBatch b) =
     liftIO . withResource (conn ^. pool) $ \dbConn ->
@@ -101,9 +101,9 @@ instance CanAppendEvents PGConnection a where
            <> " VALUES (?, ?)"
            <> " RETURNING event_number"
 
-instance CanRangeStream PGConnection e where
+instance CanRangeStream PgConnection e where
   rangeStream :: (EventData e, MonadIO m, MonadResource m)
-              => PGConnection e -> BatchSize -> [StreamName] -> (EventNumber, EventNumber)
+              => PgConnection e -> BatchSize -> [StreamName] -> (EventNumber, EventNumber)
               -> m (Stream (Of (Event e)) m ())
   rangeStream conn batchSize streamNames (minNum, maxNum)
     | maxNum < minNum        = do
@@ -135,11 +135,11 @@ instance CanRangeStream PGConnection e where
         <> " -- "
         <> show msg
 
-instance CanFromNow PGConnection e where
+instance CanFromNow PgConnection e where
   fromNow :: ( EventData e
              , MonadResource m
              )
-          => PGConnection e -> BatchSize -> [StreamName]
+          => PgConnection e -> BatchSize -> [StreamName]
           -> m (Stream (Of (Event e)) m r)
   fromNow conn batchSize _streamNames = do
     -- TODO: filter by streamNames
@@ -172,10 +172,10 @@ instance CanFromNow PGConnection e where
       deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
       deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
 
-instance CanFromEventNumber PGConnection e where
+instance CanFromEventNumber PgConnection e where
   fromEventNumber = genericFromEventNumber
 
-exists :: PGConnection a -> IO Bool
+exists :: PgConnection a -> IO Bool
 exists conn = withResource (conn ^. pool) $ \dbConn-> do
   [Only b] <- query_ dbConn . fromString . List.unlines $
                 [ "SELECT EXISTS ("
@@ -189,10 +189,10 @@ exists conn = withResource (conn ^. pool) $ \dbConn-> do
   where
     table = unPartitionName $ conn ^. partitionName
 
-ensureExists :: PGConnection a -> IO ()
+ensureExists :: PgConnection a -> IO ()
 ensureExists conn = exists conn >>= \b -> unless b $ create conn
 
-create :: PGConnection a -> IO ()
+create :: PgConnection a -> IO ()
 create conn = withResource (conn ^. pool) $ \dbConn -> do
   -- TODO: tx
   createTable           dbConn
@@ -232,7 +232,7 @@ create conn = withResource (conn ^. pool) $ \dbConn -> do
       where
         triggerName = table <> "_stream_trig"
 
-instance CanCurrentEventNumber PGConnection e where
+instance CanCurrentEventNumber PgConnection e where
   currentEventNumber conn = liftIO . withResource (conn ^. pool) $ \dbConn -> do
     [Only n] <- query_ dbConn q
     return $ EventNumber n
@@ -240,14 +240,14 @@ instance CanCurrentEventNumber PGConnection e where
       q = fromString . unpack $ "SELECT COALESCE(MAX(event_number), -1) FROM " <> tn
       PartitionName tn = conn ^. partitionName
 
-drop :: PGConnection a -> IO ()
+drop :: PgConnection a -> IO ()
 drop partConn = withResource (partConn ^. pool) $ \conn -> do
   runSQL conn $ "DROP TABLE IF EXISTS " <> table
   runSQL conn $ "DROP FUNCTION IF EXISTS stream_" <> table <> "_events() CASCADE"
   where
     table = unPartitionName $ partConn ^. partitionName
 
-recreate :: PGConnection a -> IO ()
+recreate :: PgConnection a -> IO ()
 recreate conn = do
   drop conn
   create conn
@@ -258,7 +258,7 @@ partitionNameToChannelName = (<> "_stream")
 -- Right now there is no limit on batch size... so obviously we should uh... do
 -- something about that.
 pgReadBatchFrom :: EventData a
-                => EventNumber -> BatchSize -> PGConnection a
+                => EventNumber -> BatchSize -> PgConnection a
                 -> IO (Async (Batch (Event a)))
 pgReadBatchFrom (EventNumber n) (BatchSize sz) conn
   | sz <= 0   = async (return $ Batch [])
@@ -298,13 +298,13 @@ instance FromJSON a => FromJSON (PushEvent a) where
         Nothing -> fail $ "no '" <> unpack s <> "' field"
 
 takeConnection :: MonadResource m
-               => PGConnection e -> m Connection
+               => PgConnection e -> m Connection
 takeConnection conn = do
   (dbConn, _localPool) <- takeConnectionLP conn
   return dbConn
 
 takeConnectionLP :: MonadResource m
-                 => PGConnection e -> m (Connection, LocalPool Connection)
+                 => PgConnection e -> m (Connection, LocalPool Connection)
 takeConnectionLP conn = do
   (_key, x) <- allocate take' release'
   return x
