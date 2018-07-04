@@ -5,6 +5,7 @@ module Dispenser.Server.Orphans () where
 
 import Dispenser.Server.Prelude
 
+import Data.Set                         ( fromList )
 import Database.PostgreSQL.Simple.Types ( PGArray( PGArray )
                                         , fromPGArray
                                         )
@@ -21,11 +22,11 @@ instance ToField EventNumber where
 instance FromRow EventNumber where
   fromRow = EventNumber <$> field
 
-instance FromField [StreamName] where
-  fromField f mb = fmap StreamName . fromPGArray <$> fromField f mb
+instance FromField (Set StreamName) where
+  fromField f mb = fromList . fmap StreamName . fromPGArray <$> fromField f mb
 
-instance ToField [StreamName] where
-  toField = toField . PGArray . fmap (encodeUtf8 . unStreamName)
+instance ToField (Set StreamName) where
+  toField = toField . PGArray . fmap (encodeUtf8 . unStreamName) . toList
 
 instance FromField Timestamp where
   fromField f mb = Timestamp <$> fromField f mb

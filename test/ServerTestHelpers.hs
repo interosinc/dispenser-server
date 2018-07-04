@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -10,6 +11,7 @@ module ServerTestHelpers where
 
 import Dispenser.Server.Prelude
 
+import Data.Set                               ( fromList )
 import Data.String                            ( fromString )
 import Data.Text                              ( unpack )
 import Database.PostgreSQL.Simple       as PG
@@ -20,11 +22,14 @@ import Dispenser.Server.Partition
 import System.Random
 
 newtype TestInt = TestInt Int
-  deriving (Eq, Generic, Ord, Read, Show)
+  deriving (Data, Eq, Generic, Ord, Read, Show)
 
 instance FromJSON  TestInt
 instance ToJSON    TestInt
 instance EventData TestInt
+
+instance OccuredAt TestInt where
+  occuredAt = const UseSubmittedAt
 
 instance PartitionConnection PgConnection TestInt where
 
@@ -67,5 +72,5 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url' of
 postTestEvent :: PgConnection TestInt -> Int -> IO ()
 postTestEvent conn = void
   . runResourceT
-  . postEvent conn [StreamName "test"]
+  . postEvent conn (fromList [StreamName "test"])
   . TestInt

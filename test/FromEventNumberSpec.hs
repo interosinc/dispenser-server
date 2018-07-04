@@ -7,20 +7,21 @@
 module FromEventNumberSpec where
 
 import           Dispenser.Server.Prelude
-import qualified Streaming.Prelude                as S
+import qualified Streaming.Prelude          as S
 
+import           Data.Set                   as Set
 import           Dispenser
 import           Dispenser.Server.Partition
+import           ServerTestHelpers
 import           Streaming
 import           Test.Hspec
-import           ServerTestHelpers
 
 main :: IO ()
 main = hspec spec
 
 spec :: Spec
 spec = describe "FromEventNumber" $ do
-  forM_ (map BatchSize [1..10]) $ \batchSize -> do
+  forM_ (fmap BatchSize [1..10]) $ \batchSize -> do
 
     context "given a stream with 3 events in it" $ do
       let testStream = makeTestStream batchSize 3
@@ -28,7 +29,7 @@ spec = describe "FromEventNumber" $ do
       it "should be able to take the first 2 immediately" $ do
         stream <- S.take 2 . snd <$> runResourceT testStream
         xs <- runResourceT (S.fst' <$> S.toList stream)
-        map (view eventData) xs `shouldBe` map TestInt [1..2]
+        fmap (view eventData) xs `shouldBe` fmap TestInt [1..2]
 
       it "should be able to take 5 if two more are posted asynchronously" $ do
         (conn, stream) <- runResourceT testStream
@@ -41,7 +42,7 @@ spec = describe "FromEventNumber" $ do
           postTestEvent conn 6
         let stream' = S.take 5 stream
         xs <- runResourceT (S.fst' <$> S.toList stream')
-        map (view eventData) xs `shouldBe` map TestInt [1..5]
+        fmap (view eventData) xs `shouldBe` fmap TestInt [1..5]
 
     context "given a stream with 20 events in it" $ do
       let testStream = makeTestStream batchSize 20
@@ -49,7 +50,7 @@ spec = describe "FromEventNumber" $ do
       it "should be able to take all 20" $ do
         stream <- S.take 20 . snd <$> runResourceT testStream
         xs <- runResourceT (S.fst' <$> S.toList stream)
-        map (view eventData) xs `shouldBe` map TestInt [1..20]
+        fmap (view eventData) xs `shouldBe` fmap TestInt [1..20]
 
       it "should be able to take 25 if 5 are posted asynchronously" $ do
         (conn, stream) <- runResourceT testStream
@@ -57,7 +58,7 @@ spec = describe "FromEventNumber" $ do
                                                                                     ]
         let stream' = S.take 25 stream
         xs <- runResourceT (S.fst' <$> S.toList stream')
-        map (view eventData) xs `shouldBe` map TestInt [1..25]
+        fmap (view eventData) xs `shouldBe` fmap TestInt [1..25]
 
 makeTestStream :: ( MonadIO m
                   , MonadResource m
@@ -69,5 +70,5 @@ makeTestStream batchSize n = do
   mapM_ (liftIO . postTestEvent conn) [1..n]
   (conn,) <$> fromOne conn batchSize testStreamNames
 
-testStreamNames :: [StreamName]
-testStreamNames = [StreamName "FromEventNumberSpec"]
+testStreamNames :: Set StreamName
+testStreamNames = Set.fromList [StreamName "FromEventNumberSpec"]

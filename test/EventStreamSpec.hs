@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module EventStreamSpec
@@ -8,11 +8,12 @@ module EventStreamSpec
      ) where
 
 import           Dispenser.Prelude
-import qualified Streaming.Prelude              as S
+import qualified Streaming.Prelude as S
 
+import           Data.Set          as Set
 import           Dispenser
-import           Test.Hspec
 import           ServerTestHelpers
+import           Test.Hspec
 
 main :: IO ()
 main = hspec spec
@@ -24,7 +25,7 @@ spec = do
 currentStreamFromSpec :: Spec
 currentStreamFromSpec = describe "currentStreamFrom" $ do
   let batchSize   = BatchSize 100
-      streamNames = [StreamName "currentStreamFromSpec"]
+      streamNames = Set.fromList [StreamName "currentStreamFromSpec"]
 
   context "given an empty partition" $ do
     it "should return ???" $ do
@@ -42,4 +43,4 @@ currentStreamFromSpec = describe "currentStreamFrom" $ do
       sleep 0.25
       stream <- runResourceT $ currentStreamFrom conn batchSize streamNames (EventNumber 0)
       xs :: [Event TestInt] <- runResourceT $ S.fst' <$> S.toList stream
-      map (view eventData) xs `shouldBe` map TestInt [1..3]
+      fmap (view eventData) xs `shouldBe` fmap TestInt [1..3]

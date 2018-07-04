@@ -23,7 +23,7 @@ A dispenser of wisdom (and events).
 
 ## In Progress
 
-- Aggregates / Commands / source of truth
+- Cancelled, to be replaced: Aggregates / Commands / source of truth
 
 - Eliminate BatchedStream's 1 second delay thing (or eliminate BatchedStream altogether)
 

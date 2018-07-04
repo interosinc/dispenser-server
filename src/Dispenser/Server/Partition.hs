@@ -35,6 +35,7 @@ import           Data.Aeson
 import qualified Data.ByteString.Lazy                    as Lazy
 import qualified Data.HashMap.Strict                     as HM
 import qualified Data.List                               as List
+import qualified Data.Set                                as Set
 import           Data.String                                               ( String
                                                                            , fromString
                                                                            )
@@ -43,8 +44,8 @@ import           Data.Text                                                 ( pac
                                                                            )
 import           Database.PostgreSQL.Simple                                ( query_ )
 import           Database.PostgreSQL.Simple.Notification
-import           Dispenser                                                 ( genericFromEventNumber
-                                                                           , connect
+import           Dispenser                                                 ( connect
+                                                                           , genericFromEventNumber
                                                                            )
 import           Dispenser.Server.Db                                       ( poolFromUrl
                                                                            , runSQL
@@ -87,13 +88,13 @@ newtype PushEvent a = PushEvent { unEvent :: Event a }
 -- TODO: `Foldable a` instead of `[a]`?
 instance CanAppendEvents PgConnection a where
   appendEvents :: (EventData e, MonadResource m)
-               => PgConnection e -> [StreamName] -> NonEmptyBatch e
+               => PgConnection e -> Set StreamName -> NonEmptyBatch e
                -> m EventNumber
   appendEvents conn streamNames (NonEmptyBatch b) =
     liftIO . withResource (conn ^. pool) $ \dbConn ->
       List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
     where
-      f :: Value -> (Value, [StreamName])
+      f :: Value -> (Value, Set StreamName)
       f v = (v, streamNames)
 
       q :: Query
@@ -105,7 +106,7 @@ instance CanAppendEvents PgConnection a where
 
 instance CanRangeStream PgConnection e where
   rangeStream :: (EventData e, MonadIO m, MonadResource m)
-              => PgConnection e -> BatchSize -> [StreamName] -> (EventNumber, EventNumber)
+              => PgConnection e -> BatchSize -> Set StreamName -> (EventNumber, EventNumber)
               -> m (Stream (Of (Event e)) m ())
   rangeStream conn batchSize streamNames (minNum, maxNum)
     | maxNum < minNum        = do
@@ -129,7 +130,7 @@ instance CanRangeStream PgConnection e where
             return $ batchStream >>= const nextStream
     where
       debugRangeStream :: MonadIO m
-                       => [StreamName] -> (EventNumber, EventNumber) -> String -> m ()
+                       => Set StreamName -> (EventNumber, EventNumber) -> String -> m ()
       debugRangeStream streamNames' range msg = debug $ "debugRangeStream: streamNames="
         <> show streamNames'
         <> " "
@@ -141,7 +142,7 @@ instance CanFromNow PgConnection e where
   fromNow :: ( EventData e
              , MonadResource m
              )
-          => PgConnection e -> BatchSize -> [StreamName]
+          => PgConnection e -> BatchSize -> Set StreamName
           -> m (Stream (Of (Event e)) m r)
   fromNow conn batchSize _streamNames = do
     -- TODO: filter by streamNames
@@ -210,7 +211,7 @@ create conn = withResource (conn ^. pool) $ \dbConn -> do
       <> " ( event_number BIGSERIAL PRIMARY KEY"
       <> " , stream_names TEXT[]"
       <> " , event_data   JSONB NOT NULL"
-      <> " , created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+      <> " , recorded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()"
       <> " )"
 
     createIndexes :: Connection -> IO ()
@@ -278,7 +279,7 @@ pgReadBatchFrom (EventNumber n) (BatchSize sz) conn
 
     q :: Query
     q = fromString . unpack
-          $ "SELECT event_number, stream_names, event_data, created_at"
+          $ "SELECT event_number, stream_names, event_data, recorded_at"
          <> " FROM " <> unPartitionName (conn ^. partitionName)
          <> " WHERE event_number >= ?"
          <> " ORDER BY event_number"
@@ -292,9 +293,12 @@ instance FromJSON a => FromJSON (PushEvent a) where
     n   <- parseField "event_number" obj
     sns <- parseField "stream_names" obj
     val <- parseField "event_data"   obj
-    at  <- parseField "created_at"   obj
-    return . PushEvent $ Event (EventNumber n) (map StreamName sns) val (Timestamp at)
+    at  <- parseField "recorded_at"  obj
+    return . PushEvent $ Event (EventNumber n) (promote sns) val (Timestamp at)
     where
+      promote :: Set Text -> Set StreamName
+      promote = Set.fromList . map StreamName . toList
+
       parseField s obj = case HM.lookup s obj of
         Just x  -> parseJSON x
         Nothing -> fail $ "no '" <> unpack s <> "' field"
