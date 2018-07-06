@@ -28,9 +28,6 @@ instance FromJSON  TestInt
 instance ToJSON    TestInt
 instance EventData TestInt
 
-instance OccuredAt TestInt where
-  occuredAt = const UseSubmittedAt
-
 instance PartitionConnection PgConnection TestInt where
 
 createTestPartition :: IO (PgConnection TestInt)
