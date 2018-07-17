@@ -24,13 +24,17 @@ spec = do
 
 currentStreamFromSpec :: Spec
 currentStreamFromSpec = describe "currentStreamFrom" $ do
-  let batchSize   = BatchSize 100
-      streamNames = Set.fromList [StreamName "currentStreamFromSpec"]
+  let batchSize = BatchSize 100
+      source    = SomeStreams
+        . Set.fromList
+        . return
+        . StreamName
+        $ "currentStreamFromSpec"
 
   context "given an empty partition" $ do
     it "should return ???" $ do
       conn <- createTestPartition
-      stream <- runResourceT $ currentStreamFrom conn batchSize streamNames (EventNumber 0)
+      stream <- runResourceT $ currentStreamFrom conn batchSize source (EventNumber 0)
       xs :: [Event TestInt] <- runResourceT $ S.fst' <$> S.toList stream
       xs `shouldBe` []
 
@@ -41,6 +45,6 @@ currentStreamFromSpec = describe "currentStreamFrom" $ do
       postTestEvent conn 2
       postTestEvent conn 3
       sleep 0.25
-      stream <- runResourceT $ currentStreamFrom conn batchSize streamNames (EventNumber 0)
+      stream <- runResourceT $ currentStreamFrom conn batchSize source (EventNumber 0)
       xs :: [Event TestInt] <- runResourceT $ S.fst' <$> S.toList stream
       fmap (view eventData) xs `shouldBe` fmap TestInt [1..3]

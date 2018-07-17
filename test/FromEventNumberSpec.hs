@@ -68,7 +68,7 @@ makeTestStream :: ( MonadIO m
 makeTestStream batchSize n = do
   conn <- liftIO createTestPartition
   mapM_ (liftIO . postTestEvent conn) [1..n]
-  (conn,) <$> fromOne conn batchSize testStreamNames
+  (conn,) <$> fromOne conn batchSize testStreamSource
 
-testStreamNames :: Set StreamName
-testStreamNames = Set.fromList [StreamName "FromEventNumberSpec"]
+testStreamSource :: StreamSource
+testStreamSource = SomeStreams . Set.fromList . return . StreamName $ "FromEventNumberSpec"

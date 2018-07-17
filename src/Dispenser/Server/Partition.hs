@@ -106,17 +106,17 @@ instance CanAppendEvents PgConnection a where
 
 instance CanRangeStream PgConnection e where
   rangeStream :: (EventData e, MonadIO m, MonadResource m)
-              => PgConnection e -> BatchSize -> Set StreamName -> (EventNumber, EventNumber)
+              => PgConnection e -> BatchSize -> StreamSource -> (EventNumber, EventNumber)
               -> m (Stream (Of (Event e)) m ())
-  rangeStream conn batchSize streamNames (minNum, maxNum)
+  rangeStream conn batchSize source (minNum, maxNum)
     | maxNum < minNum        = do
-        debugRangeStream streamNames (minNum, maxNum) "maxNum < minNum"
+        debugRangeStream source (minNum, maxNum) "maxNum < minNum"
         return mempty
     | maxNum < EventNumber 0 = do
-        debugRangeStream streamNames (minNum, maxNum) "max EventNumber < 0"
+        debugRangeStream source (minNum, maxNum) "max EventNumber < 0"
         return mempty
     | otherwise = do
-        debugRangeStream streamNames (minNum, maxNum) "otherwise"
+        debugRangeStream source (minNum, maxNum) "otherwise"
         -- TODO: filter by stream names
         batch :: Batch (Event a) <- liftIO $ wait =<< pgReadBatchFrom minNum batchSize conn
         let events      = unBatch batch
@@ -126,13 +126,13 @@ instance CanRangeStream PgConnection e where
           else do
             let minNum' = succ . fromMaybe (EventNumber (-1))
                   . maximumMay . map (view eventNumber) $ events
-            nextStream <- rangeStream conn batchSize streamNames (minNum', maxNum)
+            nextStream <- rangeStream conn batchSize source (minNum', maxNum)
             return $ batchStream >>= const nextStream
     where
       debugRangeStream :: MonadIO m
-                       => Set StreamName -> (EventNumber, EventNumber) -> String -> m ()
-      debugRangeStream streamNames' range msg = debug $ "debugRangeStream: streamNames="
-        <> show streamNames'
+                       => StreamSource -> (EventNumber, EventNumber) -> String -> m ()
+      debugRangeStream source' range msg = debug $ "debugRangeStream: source="
+        <> show source'
         <> " "
         <> show range
         <> " -- "
@@ -142,10 +142,10 @@ instance CanFromNow PgConnection e where
   fromNow :: ( EventData e
              , MonadResource m
              )
-          => PgConnection e -> BatchSize -> Set StreamName
+          => PgConnection e -> BatchSize -> StreamSource
           -> m (Stream (Of (Event e)) m r)
-  fromNow conn batchSize _streamNames = do
-    -- TODO: filter by streamNames
+  fromNow conn batchSize _source = do
+    -- TODO: filter by source
 
     debug $ "Dispenser.Server.Partition: fromNow, batchSize=" <> show batchSize
     -- TODO: This will leak connections if an exception occurs.
