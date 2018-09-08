@@ -127,14 +127,18 @@ instance CanRangeStream PgConnection e where
             batchStream = S.each events
         if any ((>= maxNum) . view eventNumber) events
             || (length events < (fromIntegral . unBatchSize) batchSize)
-           -- TODO: is this right?  I added it to prevent tests hanging that
-           --       started when I actually implemented filtering based on
-           --       StreamSource but I'm not sure if philosophically
-           --       rangeStream should block until the event stream catches up
-           --       to the end of the range or not.  maybe it should or maybe
-           --       there should be both blocking and non-blocking interfaces.
-           --       either way for now I'm taking the coward's way out since
-           --       this fixes the tests.
+            -- TODO: is this right?  I added it to prevent tests hanging that
+            --       started when I actually implemented filtering based on
+            --       StreamSource but I'm not sure if philosophically
+            --       rangeStream should block until the event stream catches up
+            --       to the end of the range or not.  maybe it should or maybe
+            --       there should be both blocking and non-blocking interfaces.
+            --       either way for now I'm taking the coward's way out since
+            --       this fixes the tests.
+
+            -- TODO: If nothing else it seems like it could miss an event if it
+            --       reads short but new events come in before it switches over
+            --       to LISTEN
           then return $ S.takeWhile ((<= maxNum) . view eventNumber) batchStream
           else do
             let minNum' = succ . fromMaybe (EventNumber (-1))
