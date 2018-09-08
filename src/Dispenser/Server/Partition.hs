@@ -126,7 +126,7 @@ instance CanRangeStream PgConnection e where
         let events      = unBatch batch
             batchStream = S.each events
         if any ((>= maxNum) . view eventNumber) events
-           || length events < fromIntegral (unEventNumber maxNum - unEventNumber minNum)
+           --  || length events < fromIntegral (unEventNumber maxNum - unEventNumber minNum)
            -- TODO: is this right?  I added it to prevent tests hanging that
            --       started when I actually implemented filtering based on
            --       StreamSource but I'm not sure if philosophically
