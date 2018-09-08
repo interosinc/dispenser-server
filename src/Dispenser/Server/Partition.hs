@@ -126,7 +126,7 @@ instance CanRangeStream PgConnection e where
         let events      = unBatch batch
             batchStream = S.each events
         if any ((>= maxNum) . view eventNumber) events
-           --  || length events < fromIntegral (unEventNumber maxNum - unEventNumber minNum)
+            || (length events < (fromIntegral . unBatchSize) batchSize)
            -- TODO: is this right?  I added it to prevent tests hanging that
            --       started when I actually implemented filtering based on
            --       StreamSource but I'm not sure if philosophically
@@ -299,7 +299,7 @@ pgReadBatchFrom (EventNumber n) (BatchSize sz) source conn
           $ "SELECT event_number, stream_names, event_data, recorded_at"
          <> " FROM " <> unPartitionName (conn ^. partitionName)
          <> " WHERE event_number >= ?"
-         -- <> streamSourceClause
+         <> streamSourceClause
          <> " ORDER BY event_number"
          <> " LIMIT ?"
 
