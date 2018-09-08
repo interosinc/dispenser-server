@@ -30,8 +30,8 @@ instance EventData TestInt
 
 instance PartitionConnection PgConnection TestInt where
 
-createTestPartition :: IO (PgConnection TestInt)
-createTestPartition = do
+createTestPartition :: MonadIO m => m (PgConnection TestInt)
+createTestPartition = liftIO $ do
   pname <- ("test_disp_" <>) . show <$> randomRIO (0, maxBound :: Int)
   client :: PgClient TestInt <- new poolMax url'
   conn <- D.connect (PartitionName pname) client
@@ -66,8 +66,9 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url' of
               LIKE 'test_disp_%'
             |]
 
-postTestEvent :: PgConnection TestInt -> Int -> IO ()
+postTestEvent :: MonadIO m => PgConnection TestInt -> Int -> m ()
 postTestEvent conn = void
+  . liftIO
   . runResourceT
   . postEvent conn (fromList [StreamName "test"])
   . TestInt

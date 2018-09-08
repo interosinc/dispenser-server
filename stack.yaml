@@ -3,7 +3,9 @@ resolver: lts-9.21
 packages:
 - location: .
 - location: ../dispenser-core
-  extra-dep: true
+  # extra-dep: true
+  # TODO: ^ put me back
+
 # - location:
 #     git: git@dispenser-core.github.com:SuperpowersCorp/dispenser-core.git
 #     commit: 81753b5ba6dd9a86d7d5991a6e24b231e0568974

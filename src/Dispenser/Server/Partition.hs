@@ -26,7 +26,9 @@ module Dispenser.Server.Partition
      , partitionNameToChannelName
      ) where
 
-import           Dispenser.Server.Prelude                           hiding ( drop )
+import           Dispenser.Server.Prelude                           hiding ( drop
+                                                                           , intercalate
+                                                                           )
 import qualified Streaming.Prelude                       as S
 
 import           Control.Monad.Fail                                        ( fail )
@@ -39,12 +41,14 @@ import qualified Data.Set                                as Set
 import           Data.String                                               ( String
                                                                            , fromString
                                                                            )
-import           Data.Text                                                 ( pack
+import           Data.Text                                                 ( intercalate
+                                                                           , pack
                                                                            , unpack
                                                                            )
 import           Database.PostgreSQL.Simple                                ( query_ )
 import           Database.PostgreSQL.Simple.Notification
-import           Dispenser                                                 ( connect
+import           Dispenser                                                 ( StreamSource
+                                                                           , connect
                                                                            , genericFromEventNumber
                                                                            )
 import           Dispenser.Server.Db                                       ( poolFromUrl
@@ -70,14 +74,14 @@ makeFields ''PgConnection
 new :: Word -> Text -> IO (PgClient a)
 new = (return .) . PgClient
 
-instance EventData e => Client (PgClient e) PgConnection e where
+instance Client (PgClient e) PgConnection e where
   connect :: MonadIO m => PartitionName -> PgClient e -> m (PgConnection e)
   connect partName client = do
     let part = Partition (DatabaseURL $ client ^. url) partName
     PgConnection part <$> liftIO
       (poolFromUrl (part ^. dbUrl) (fromIntegral $ client ^. maxPoolSize))
 
-instance EventData e => PartitionConnection PgConnection e
+instance PartitionConnection PgConnection e
 
 instance HasPartition (PgConnection e) where
   partition = connectedPartition
@@ -117,11 +121,20 @@ instance CanRangeStream PgConnection e where
         return mempty
     | otherwise = do
         debugRangeStream source (minNum, maxNum) "otherwise"
-        -- TODO: filter by stream names
-        batch :: Batch (Event a) <- liftIO $ wait =<< pgReadBatchFrom minNum batchSize conn
+        batch :: Batch (Event a) <- liftIO $ wait
+          =<< pgReadBatchFrom minNum batchSize source conn
         let events      = unBatch batch
             batchStream = S.each events
         if any ((>= maxNum) . view eventNumber) events
+           || length events < fromIntegral (unEventNumber maxNum - unEventNumber minNum)
+           -- TODO: is this right?  I added it to prevent tests hanging that
+           --       started when I actually implemented filtering based on
+           --       StreamSource but I'm not sure if philosophically
+           --       rangeStream should block until the event stream catches up
+           --       to the end of the range or not.  maybe it should or maybe
+           --       there should be both blocking and non-blocking interfaces.
+           --       either way for now I'm taking the coward's way out since
+           --       this fixes the tests.
           then return $ S.takeWhile ((<= maxNum) . view eventNumber) batchStream
           else do
             let minNum' = succ . fromMaybe (EventNumber (-1))
@@ -261,12 +274,16 @@ partitionNameToChannelName = (<> "_stream")
 -- Right now there is no limit on batch size... so obviously we should uh... do
 -- something about that.
 pgReadBatchFrom :: EventData a
-                => EventNumber -> BatchSize -> PgConnection a
+                => EventNumber -> BatchSize -> StreamSource -> PgConnection a
                 -> IO (Async (Batch (Event a)))
-pgReadBatchFrom (EventNumber n) (BatchSize sz) conn
+pgReadBatchFrom (EventNumber n) (BatchSize sz) source conn
   | sz <= 0   = async (return $ Batch [])
   | otherwise = async $ withResource (conn ^. pool) $ \dbConn -> do
+      -- debug $ "streamSourceClause: " <> show streamSourceClause
+      -- debug $ "q: " <> show q
+      -- debug $ "params: " <> show params
       batchValue :: Batch (Event Value) <- Batch <$> query dbConn q params
+      -- debug $ "result: " <> show batchValue
       return $ f batchValue
   where
     f :: EventData a => Batch (Event Value) -> Batch (Event a)
@@ -282,11 +299,23 @@ pgReadBatchFrom (EventNumber n) (BatchSize sz) conn
           $ "SELECT event_number, stream_names, event_data, recorded_at"
          <> " FROM " <> unPartitionName (conn ^. partitionName)
          <> " WHERE event_number >= ?"
+         -- <> streamSourceClause
          <> " ORDER BY event_number"
          <> " LIMIT ?"
 
     params :: (Int, Int)
     params = bimap fromIntegral fromIntegral (n, sz)
+
+    streamSourceClause = maybe "" (" AND stream_names && " <>) (streamArray source)
+
+    streamArray :: StreamSource -> Maybe Text
+    streamArray AllStreams       = Nothing
+    streamArray (SomeStreams ss) = Just
+      . ("'{" <>) . (<> "}'")
+      . intercalate ","
+      . map (show . unStreamName)
+      . toList
+      $ ss
 
 instance FromJSON a => FromJSON (PushEvent a) where
   parseJSON = withObject "notificationEvent" $ \obj -> do

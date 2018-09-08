@@ -10,7 +10,6 @@ module EventStreamSpec
 import           Dispenser.Prelude
 import qualified Streaming.Prelude as S
 
-import           Data.Set          as Set
 import           Dispenser
 import           ServerTestHelpers
 import           Test.Hspec
@@ -19,26 +18,21 @@ main :: IO ()
 main = hspec spec
 
 spec :: Spec
-spec = do
-  currentStreamFromSpec
+spec = currentStreamFromSpec
 
 currentStreamFromSpec :: Spec
 currentStreamFromSpec = describe "currentStreamFrom" $ do
   let batchSize = BatchSize 100
-      source    = SomeStreams
-        . Set.fromList
-        . return
-        . StreamName
-        $ "currentStreamFromSpec"
+      source    = singletonSource $ StreamName "test"
 
-  context "given an empty partition" $ do
+  context "given an empty partition" $
     it "should return ???" $ do
       conn <- createTestPartition
       stream <- runResourceT $ currentStreamFrom conn batchSize source (EventNumber 0)
       xs :: [Event TestInt] <- runResourceT $ S.fst' <$> S.toList stream
       xs `shouldBe` []
 
-  context "given a partition with events" $ do
+  context "given a partition with events" $
     it "should return a stream of those events" $ do
       conn <- createTestPartition
       postTestEvent conn 1
