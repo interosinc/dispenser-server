@@ -5,7 +5,7 @@ packages:
 # - location: ../dispenser-core
 #   extra-dep: true
 - location:
-    git: git@dispenser-core.github.com:SuperpowersCorp/dispenser-core.git
+    git: git@github.com:SuperpowersCorp/dispenser-core.git
     commit: e8375b9445d622a7627e60c194b515c9b7963a30
   extra-dep: true
 
