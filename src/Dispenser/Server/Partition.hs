@@ -232,7 +232,10 @@ create conn = withResource (conn ^. pool) $ \dbConn -> do
       <> " )"
 
     createIndexes :: Connection -> IO ()
-    createIndexes _conn = return () -- TODO: createIndexes
+    createIndexes dbConn = runSQL dbConn $
+      "CREATE INDEX " <> idxName <> " ON " <> table <> " USING GIN(stream_names)"
+      where
+        idxName = table <> "_stream_names_idx"
 
     createStreamTriggerFn :: Connection -> IO ()
     createStreamTriggerFn dbConn = runSQL dbConn $
