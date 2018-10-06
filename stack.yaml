@@ -1,4 +1,4 @@
-resolver: lts-9.21
+resolver: lts-12.11
 
 packages:
 - location: .
@@ -6,10 +6,10 @@ packages:
 #   extra-dep: true
 - location:
     git: git@github.com:SuperpowersCorp/dispenser-core.git
-    commit: e8375b9445d622a7627e60c194b515c9b7963a30
+    commit: 60f681ea42e4a460759126c6b993f1a6c9ffeb63
   extra-dep: true
 
 extra-deps:
 - monad-io-adapter-0.1.0.0
-- protolude-0.2.1
-- safe-exceptions-0.1.7.0
+- protolude-0.2.2
+# - safe-exceptions-0.1.7.0
