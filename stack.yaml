@@ -12,4 +12,3 @@ packages:
 extra-deps:
 - monad-io-adapter-0.1.0.0
 - protolude-0.2.2
-# - safe-exceptions-0.1.7.0
