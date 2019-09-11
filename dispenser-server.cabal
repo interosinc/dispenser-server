@@ -18,7 +18,6 @@ library
   ghc-options:         -Wall
   exposed-modules:     Dispenser.Server
                      , Dispenser.Server.Db
-                     , Dispenser.Server.Main
                      , Dispenser.Server.Orphans
                      , Dispenser.Server.Partition
                      , Dispenser.Server.Prelude
@@ -44,33 +43,6 @@ library
                      , time
                      , unordered-containers
   default-language:    Haskell2010
-
-executable dispenser-server
-  hs-source-dirs:   app
-  main-is:          Main.hs
-  ghc-options:      -Wall -threaded -rtsopts -with-rtsopts=-N
-  build-depends:    aeson
-                  , base
-                  , bytestring
-                  , containers
-                  , data-default
-                  , dispenser-core
-                  , dispenser-server
-                  , foldl
-                  , lens
-                  , monad-control
-                  , monad-io-adapter
-                  , postgresql-simple
-                  , postgresql-simple-url
-                  , random
-                  , resource-pool
-                  , resourcet
-                  , stm
-                  , streaming
-                  , text
-                  , time
-                  , unordered-containers
-  default-language: Haskell2010
 
 test-suite dispenser-test
   type:                exitcode-stdio-1.0
