@@ -43,8 +43,6 @@ library
                      , text
                      , time
                      , unordered-containers
-                     -- TODO: move to separate zeromq "sidecar" lib
-                     , zeromq4-haskell
   default-language:    Haskell2010
 
 executable dispenser-server
@@ -72,7 +70,6 @@ executable dispenser-server
                   , text
                   , time
                   , unordered-containers
-                  , zeromq4-haskell
   default-language: Haskell2010
 
 test-suite dispenser-test
@@ -105,7 +102,6 @@ test-suite dispenser-test
                      , text
                      , time
                      , unordered-containers
-                     , zeromq4-haskell
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
