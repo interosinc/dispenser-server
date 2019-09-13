@@ -1,8 +1,6 @@
 help:
 	@cat Makefile
 
-EXE=dispenser-server
-
 build:
 	stack build
 
@@ -26,12 +24,6 @@ longboye-all:
 	longboye pragmas src
 	longboye pragmas test
 
-run:
-	stack exec $(STACK_ARGS) -- $(EXE) $(ARGS)
-
-setup:
-	stack setup
-
 test:
 	stack test
 
@@ -45,10 +37,8 @@ b: build
 hl: hlint
 i: install
 lba: longboye-all
-r: run
-s: setup
-w: watch
 t: test
+w: watch
 wt: watch-test
 
 .PHONY: test
