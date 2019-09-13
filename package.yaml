@@ -1,0 +1,64 @@
+name:                dispenser-server
+version:             0.2.0.0
+github:              "interosinc/dispenser-server"
+license:             BSD3
+author:              "John Evans"
+maintainer:          "jevans@interos.net"
+copyright:           "2018 Superpowers Corp, 2019 Interos, Inc"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+synopsis:            PostgreSQL implementation of Dispenser event sourcing.
+category:            Database
+
+description:         README at <https://github.com/interosinc/dispenser-server#readme>
+
+dependencies:
+- aeson
+- base                      >= 4.7 && < 5
+- bytestring
+- containers
+- data-default
+- dispenser-core
+- foldl
+- lens
+- monad-control
+- monad-io-adapter
+- postgresql-simple
+- postgresql-simple-url
+- random
+- resource-pool
+- resourcet
+- stm
+- streaming
+- text
+- time
+- unordered-containers
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  - -Wcompat
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wredundant-constraints
+
+tests:
+  dispenser-server-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wcompat
+    - -Wincomplete-record-updates
+    - -Wincomplete-uni-patterns
+    - -Wredundant-constraints
+    dependencies:
+    - QuickCheck
+    - dispenser-server
+    - hspec

@@ -6,7 +6,7 @@
 }:
 mkDerivation {
   pname = "dispenser-server";
-  version = "0.1.0.0";
+  version = "0.2.0.0";
   src = ./.;
   libraryHaskellDepends = [
     aeson base bytestring containers data-default dispenser-core foldl lens
