@@ -14,7 +14,7 @@ import Database.PostgreSQL.Simple ( close
                                   , connectPostgreSQL
                                   , execute_
                                   )
-import Dispenser.Server.Types     ( DatabaseURL( DatabaseURL ) )
+import Dispenser.Types            ( DatabaseURL( DatabaseURL ) )
 
 poolFromUrl :: DatabaseURL -> Int -> IO (Pool Connection)
 poolFromUrl (DatabaseURL url) size =

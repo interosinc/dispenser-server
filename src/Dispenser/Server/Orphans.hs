@@ -9,7 +9,12 @@ import Data.Set                         ( fromList )
 import Database.PostgreSQL.Simple.Types ( PGArray( PGArray )
                                         , fromPGArray
                                         )
-import Dispenser.Server.Types
+import Dispenser.Types                  ( Event
+                                        , EventNumber( EventNumber )
+                                        , StreamName( StreamName )
+                                        , Timestamp( Timestamp )
+                                        , unStreamName
+                                        )
 
 instance FromField a => FromRow (Event a) where
 
