@@ -31,6 +31,7 @@ import           Data.Text                                                 ( int
                                                                            , unpack
                                                                            )
 import           Database.PostgreSQL.Simple                                ( query_ )
+import           Database.PostgreSQL.Simple                                ( Connection )
 import           Database.PostgreSQL.Simple.Notification
 import           Dispenser                                                 ( StreamSource
                                                                            , connect
@@ -53,6 +54,11 @@ data PgConnection a = PgConnection
   , _pgConnectionPool               :: Pool Connection
   } deriving (Generic)
 
+data WrappedConnection a = WrappedConnection
+  { _wrappedConnectionConnectedPartition :: Partition
+  , _wrappedConnectionConnection         :: Connection
+  }
+
 makeFields ''PgClient
 makeFields ''PgConnection
 
@@ -74,14 +80,37 @@ instance HasPartition (PgConnection e) where
 newtype PushEvent a = PushEvent { unEvent :: Event a }
   deriving (Eq, Ord, Read, Show)
 
+-- -- TODO: `Foldable a` instead of `[a]`?
+-- instance CanAppendEvents PgConnection a where
+--   appendEvents :: (EventData e, MonadResource m)
+--                => PgConnection e -> Set StreamName -> NonEmptyBatch e
+--                -> m EventNumber
+--   appendEvents conn streamNames (NonEmptyBatch b) =
+--     liftIO . withResource (conn ^. pool) $ \dbConn ->
+--       List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
+--     where
+--       f :: Value -> (Value, Set StreamName)
+--       f v = (v, streamNames)
+
+--       q :: Query
+--       q = fromString . unpack
+--             $ "INSERT INTO " <> unPartitionName (conn ^. partitionName)
+--            <> " (event_data, stream_names)"
+--            <> " VALUES (?, ?)"
+--            <> " RETURNING event_number"
+
+-- TODO: Figure out how to call appendEvents on WrappedConnection from
+-- appendEvents for PgConnection
+
 -- TODO: `Foldable a` instead of `[a]`?
 instance CanAppendEvents PgConnection a where
   appendEvents :: (EventData e, MonadResource m)
                => PgConnection e -> Set StreamName -> NonEmptyBatch e
                -> m EventNumber
-  appendEvents conn streamNames (NonEmptyBatch b) =
-    liftIO . withResource (conn ^. pool) $ \dbConn ->
-      List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
+  appendEvents conn streamNames (NonEmptyBatch b) = do
+    let g :: Connection -> IO EventNumber
+        g dbc = List.last <$> returning dbc q (fmap f $ toJSON <$> toList b)
+    liftIO . withResource (conn ^. pool) $ g
     where
       f :: Value -> (Value, Set StreamName)
       f v = (v, streamNames)
@@ -89,6 +118,25 @@ instance CanAppendEvents PgConnection a where
       q :: Query
       q = fromString . unpack
             $ "INSERT INTO " <> unPartitionName (conn ^. partitionName)
+           <> " (event_data, stream_names)"
+           <> " VALUES (?, ?)"
+           <> " RETURNING event_number"
+
+instance CanAppendEvents WrappedConnection a where
+  appendEvents :: (EventData e, MonadIO m)
+               => WrappedConnection e
+               -> Set StreamName
+               -> NonEmptyBatch e
+               -> m EventNumber
+  appendEvents (WrappedConnection part dbConn) streamNames (NonEmptyBatch b) = liftIO $ do
+    List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
+    where
+      f :: Value -> (Value, Set StreamName)
+      f v = (v, streamNames)
+
+      q :: Query
+      q = fromString . unpack
+            $ "INSERT INTO " <> unPartitionName (part ^. partitionName)
            <> " (event_data, stream_names)"
            <> " VALUES (?, ?)"
            <> " RETURNING event_number"
