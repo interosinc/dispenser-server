@@ -1,13 +1,16 @@
-{-# LANGUAGE DeriveGeneric          #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE InstanceSigs           #-}
-{-# LANGUAGE LambdaCase             #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE NoImplicitPrelude      #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TemplateHaskell        #-}
+{-# LANGUAGE DeriveGeneric                 #-}
+{-# LANGUAGE FlexibleContexts              #-}
+{-# LANGUAGE FlexibleInstances             #-}
+{-# LANGUAGE FunctionalDependencies        #-}
+{-# LANGUAGE InstanceSigs                  #-}
+{-# LANGUAGE LambdaCase                    #-}
+{-# LANGUAGE MonoLocalBinds                #-}
+{-# LANGUAGE MultiParamTypeClasses         #-}
+{-# LANGUAGE NoImplicitPrelude             #-}
+{-# LANGUAGE OverloadedStrings             #-}
+{-# LANGUAGE ScopedTypeVariables           #-}
+{-# LANGUAGE TemplateHaskell               #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Dispenser.Server.Partition.Internal where
 
@@ -65,14 +68,15 @@ makeFields ''PgConnection
 new :: Word -> Text -> IO (PgClient a)
 new = (return .) . PgClient
 
-instance Client (PgClient e) PgConnection e where
-  connect :: MonadIO m => PartitionName -> PgClient e -> m (PgConnection e)
+instance (EventData e, MonadResource m) => Client (PgClient e) m PgConnection e where
+  connect :: PartitionName -> PgClient e -> m (PgConnection e)
   connect partName client = do
     let part = Partition (DatabaseURL $ client ^. url) partName
     PgConnection part <$> liftIO
       (poolFromUrl (part ^. dbUrl) (fromIntegral $ client ^. maxPoolSize))
 
-instance PartitionConnection PgConnection e
+_proof :: PartitionConnection m PgConnection e => Proxy (m e)
+_proof = Proxy
 
 instance HasPartition (PgConnection e) where
   partition = connectedPartition
@@ -103,7 +107,7 @@ newtype PushEvent a = PushEvent { unEvent :: Event a }
 -- appendEvents for PgConnection
 
 -- TODO: `Foldable a` instead of `[a]`?
-instance CanAppendEvents PgConnection a where
+instance (EventData a, MonadResource m) => CanAppendEvents m PgConnection a where
   appendEvents :: (EventData e, MonadResource m)
                => PgConnection e -> Set StreamName -> NonEmptyBatch e
                -> m EventNumber
@@ -122,7 +126,7 @@ instance CanAppendEvents PgConnection a where
            <> " VALUES (?, ?)"
            <> " RETURNING event_number"
 
-instance CanAppendEvents WrappedConnection a where
+instance (EventData a, MonadResource m) => CanAppendEvents m WrappedConnection a where
   appendEvents :: (EventData e, MonadIO m)
                => WrappedConnection e
                -> Set StreamName
@@ -141,7 +145,7 @@ instance CanAppendEvents WrappedConnection a where
            <> " VALUES (?, ?)"
            <> " RETURNING event_number"
 
-instance CanRangeStream PgConnection e where
+instance CanRangeStream m PgConnection e where
   rangeStream :: (EventData e, MonadIO m, MonadResource m)
               => PgConnection e -> BatchSize -> StreamSource -> (EventNumber, EventNumber)
               -> m (Stream (Of (Event e)) m ())
@@ -179,8 +183,7 @@ instance CanRangeStream PgConnection e where
             nextStream <- rangeStream conn batchSize source (minNum', maxNum)
             return $ batchStream >>= const nextStream
     where
-      debugRangeStream :: MonadIO m
-                       => StreamSource -> (EventNumber, EventNumber) -> String -> m ()
+      debugRangeStream :: StreamSource -> (EventNumber, EventNumber) -> String -> m ()
       debugRangeStream source' range msg = debug $ "debugRangeStream: source="
         <> show source'
         <> " "
@@ -188,7 +191,7 @@ instance CanRangeStream PgConnection e where
         <> " -- "
         <> show msg
 
-instance CanFromNow PgConnection e where
+instance CanFromNow m PgConnection e where
   fromNow :: ( EventData e
              , MonadResource m
              )
@@ -225,7 +228,7 @@ instance CanFromNow PgConnection e where
       deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
       deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
 
-instance CanFromEventNumber PgConnection e where
+instance CanFromEventNumber m PgConnection e where
   fromEventNumber = genericFromEventNumber
 
 exists :: PgConnection a -> IO Bool
@@ -288,7 +291,7 @@ create conn = withResource (conn ^. pool) $ \dbConn -> do
       where
         triggerName = table <> "_stream_trig"
 
-instance CanCurrentEventNumber PgConnection e where
+instance CanCurrentEventNumber m PgConnection e where
   currentEventNumber conn = liftIO . withResource (conn ^. pool) $ \dbConn -> do
     [Only n] <- query_ dbConn q
     return $ EventNumber n

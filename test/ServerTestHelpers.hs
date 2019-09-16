@@ -1,11 +1,13 @@
-{-# LANGUAGE DeriveDataTypeable    #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE QuasiQuotes           #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE DeriveDataTypeable            #-}
+{-# LANGUAGE DeriveGeneric                 #-}
+{-# LANGUAGE FlexibleContexts              #-}
+{-# LANGUAGE MonoLocalBinds                #-}
+{-# LANGUAGE MultiParamTypeClasses         #-}
+{-# LANGUAGE NoImplicitPrelude             #-}
+{-# LANGUAGE OverloadedStrings             #-}
+{-# LANGUAGE QuasiQuotes                   #-}
+{-# LANGUAGE ScopedTypeVariables           #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module ServerTestHelpers where
 
@@ -28,13 +30,16 @@ instance FromJSON  TestInt
 instance ToJSON    TestInt
 instance EventData TestInt
 
-instance PartitionConnection PgConnection TestInt where
+-- instance PartitionConnection PgConnection TestInt where
+
+_proof :: PartitionConnection m PgConnection TestInt => Proxy (m TestInt)
+_proof = Proxy
 
 createTestPartition :: MonadIO m => m (PgConnection TestInt)
 createTestPartition = liftIO $ do
   pname <- ("test_disp_" <>) . show <$> randomRIO (0, maxBound :: Int)
   client :: PgClient TestInt <- new poolMax url'
-  conn <- D.connect (PartitionName pname) client
+  conn <- liftIO . runResourceT $ D.connect (PartitionName pname) client
   recreate conn
   return conn
   where
