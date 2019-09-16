@@ -42,7 +42,7 @@ createTestPartition = liftIO $ do
     poolMax          = 5
 
 testDbUrl :: DatabaseURL
-testDbUrl = DatabaseURL "postgres://dispenser@localhost:5432/dispenser"
+testDbUrl = DatabaseURL "postgres://dispenser:dispenser@localhost:5432/dispenser"
 
 deleteAllTestPartitions :: IO ()
 deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url' of
