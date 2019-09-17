@@ -17,10 +17,8 @@ hlint:
 	stack exec hlint .
 
 longboye-all:
-	longboye imports app
 	longboye imports src
 	longboye imports test
-	longboye pragmas app
 	longboye pragmas src
 	longboye pragmas test
 
