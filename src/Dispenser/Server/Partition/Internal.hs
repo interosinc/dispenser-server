@@ -69,7 +69,7 @@ makeFields ''PgConnection
 new :: Word -> Text -> IO (PgClient a)
 new = (return .) . PgClient
 
-instance (EventData e, MonadResource m) => Client (PgClient e) PgConnection m e where
+instance (EventData e, MonadResource m, MonadBaseControl IO m) => Client (PgClient e) PgConnection m e where
   connect :: PartitionName -> PgClient e -> m (PgConnection e)
   connect partName client = do
     let part = Partition (DatabaseURL $ client ^. url) partName
@@ -117,55 +117,20 @@ instance (EventData a, MonadResource m)
            <> " VALUES (?, ?)"
            <> " RETURNING event_number"
 
-instance CanRangeStream PgConnection m e where
-  rangeStream :: (EventData e, MonadIO m, MonadResource m)
-              => PgConnection e -> BatchSize -> StreamSource -> (EventNumber, EventNumber)
+instance MonadBaseControl IO m => CanRangeStream PgConnection m e where
+  rangeStream :: (EventData e, MonadResource m, MonadBaseControl IO m)
+              => PgConnection e
+              -> BatchSize
+              -> StreamSource
+              -> (EventNumber, EventNumber)
               -> m (Stream (Of (Event e)) m ())
-  rangeStream conn batchSize source (minNum, maxNum)
-    | maxNum < minNum        = do
-        debugRangeStream source (minNum, maxNum) "maxNum < minNum"
-        return mempty
-    | maxNum < EventNumber 0 = do
-        debugRangeStream source (minNum, maxNum) "max EventNumber < 0"
-        return mempty
-    | otherwise = do
-        debugRangeStream source (minNum, maxNum) "otherwise"
-        batch :: Batch (Event a) <- liftIO $ wait
-          =<< pgReadBatchFrom minNum batchSize source conn
-        let events      = unBatch batch
-            batchStream = S.each events
-        if any ((>= maxNum) . view eventNumber) events
-            || (length events < (fromIntegral . unBatchSize) batchSize)
-            -- TODO: is this right?  I added it to prevent tests hanging that
-            --       started when I actually implemented filtering based on
-            --       StreamSource but I'm not sure if philosophically
-            --       rangeStream should block until the event stream catches up
-            --       to the end of the range or not.  maybe it should or maybe
-            --       there should be both blocking and non-blocking interfaces.
-            --       either way for now I'm taking the coward's way out since
-            --       this fixes the tests.
-
-            -- TODO: If nothing else it seems like it could miss an event if it
-            --       reads short but new events come in before it switches over
-            --       to LISTEN
-          then return $ S.takeWhile ((<= maxNum) . view eventNumber) batchStream
-          else do
-            let minNum' = succ . fromMaybe (EventNumber (-1))
-                  . maximumMay . map (view eventNumber) $ events
-            nextStream <- rangeStream conn batchSize source (minNum', maxNum)
-            return $ batchStream >>= const nextStream
-    where
-      debugRangeStream :: MonadIO m
-                       => StreamSource -> (EventNumber, EventNumber) -> String -> m ()
-      debugRangeStream source' range msg = debug $ "debugRangeStream: source="
-        <> show source'
-        <> " "
-        <> show range
-        <> " -- "
-        <> show msg
+  rangeStream conn batchSize source range =
+    withResource (conn ^. pool) $ \dbConn -> do
+      let wrappedConn = WrappedConnection (conn ^. partition) dbConn
+      rangeStream wrappedConn batchSize source range
 
 instance CanRangeStream WrappedConnection m e where
-  rangeStream :: (EventData e, MonadIO m, MonadResource m)
+  rangeStream :: (EventData e, MonadResource m)
               => WrappedConnection e
               -> BatchSize
               -> StreamSource
@@ -250,7 +215,7 @@ instance CanFromNow PgConnection m e where
       deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
       deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
 
-instance CanFromEventNumber PgConnection m e where
+instance MonadBaseControl IO m => CanFromEventNumber PgConnection m e where
   fromEventNumber = genericFromEventNumber
 
 exists :: PgConnection a -> IO Bool
@@ -355,46 +320,10 @@ pgReadBatchFrom :: EventData a
                 -> StreamSource
                 -> PgConnection a
                 -> IO (Async (Batch (Event a)))
-pgReadBatchFrom (EventNumber n) (BatchSize sz) source conn
-  | sz <= 0   = async (return $ Batch [])
-  | otherwise = async $ withResource (conn ^. pool) $ \dbConn -> do
-      -- debug $ "streamSourceClause: " <> show streamSourceClause
-      -- debug $ "q: " <> show q
-      -- debug $ "params: " <> show params
-      batchValue :: Batch (Event Value) <- Batch <$> query dbConn q params
-      -- debug $ "result: " <> show batchValue
-      return $ f batchValue
-  where
-    f :: EventData a => Batch (Event Value) -> Batch (Event a)
-    f = fmap (g . fromJSON <$>)
-
-    g :: Result a -> a
-    g = \case
-      Error e   -> panic $ "unexpected error deserializing result: " <> show e
-      Success x -> x
-
-    q :: Query
-    q = fromString . unpack
-          $ "SELECT event_number, stream_names, event_data, recorded_at"
-         <> " FROM " <> unPartitionName (conn ^. partitionName)
-         <> " WHERE event_number >= ?"
-         <> streamSourceClause
-         <> " ORDER BY event_number"
-         <> " LIMIT ?"
-
-    params :: (Int, Int)
-    params = bimap fromIntegral fromIntegral (n, sz)
-
-    streamSourceClause = maybe "" (" AND stream_names && " <>) (streamArray source)
-
-    streamArray :: StreamSource -> Maybe Text
-    streamArray AllStreams       = Nothing
-    streamArray (SomeStreams ss) = Just
-      . ("'{" <>) . (<> "}'")
-      . intercalate ","
-      . map (show . unStreamName)
-      . toList
-      $ ss
+pgReadBatchFrom evNum batchSize source conn =
+  withResource (conn ^. pool) $ \dbConn -> do
+    let wrappedConn = WrappedConnection (conn ^. partition) dbConn
+    wpgReadBatchFrom evNum batchSize source wrappedConn
 
 wpgReadBatchFrom :: EventData a
                  => EventNumber

@@ -21,7 +21,7 @@ main = hspec spec
 spec :: Spec
 spec = describe "FromEventNumber" $ do
 
-  context "isolating known issues" $ do
+  context "isolating known issues" $
     it "should work for numEvents=4, batchSize=2, take=numEvents" $ do
       let numEvents  = 4
           batchSize  = BatchSize 2

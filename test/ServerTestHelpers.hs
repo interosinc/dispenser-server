@@ -38,13 +38,26 @@ _proof = Proxy
 createTestPartition :: MonadIO m => m (PgConnection TestInt)
 createTestPartition = liftIO $ do
   pname <- ("test_disp_" <>) . show <$> randomRIO (0, maxBound :: Int)
+  let _ = pname :: Text
   client :: PgClient TestInt <- new poolMax url'
-  conn <- liftIO . runResourceT $ D.connect (PartitionName pname) client
+  conn <- runResourceT $ D.connect (PartitionName pname) client
   recreate conn
   return conn
   where
     DatabaseURL url' = testDbUrl
     poolMax          = 5
+
+-- createTestPartition :: MonadIO m => m (PgConnection TestInt)
+-- createTestPartition = do
+--   pname <- liftIO $ ("test_disp_" <>) . show <$> randomRIO (0, maxBound :: Int)
+--   let _ = pname :: Text
+--   client :: PgClient TestInt <- liftIO $ new poolMax url'
+--   conn <- liftIO . runResourceT $ D.connect (PartitionName pname) client
+--   liftIO $ recreate conn
+--   return conn
+--   where
+--     DatabaseURL url' = testDbUrl
+--     poolMax          = 5
 
 testDbUrl :: DatabaseURL
 testDbUrl = DatabaseURL "postgres://dispenser:dispenser@localhost:5432/dispenser"
