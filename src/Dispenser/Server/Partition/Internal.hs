@@ -71,10 +71,10 @@ new = (return .) . PgClient
 
 instance (EventData e, MonadResource m, MonadBaseControl IO m) => Client (PgClient e) PgConnection m e where
   connect :: PartitionName -> PgClient e -> m (PgConnection e)
-  connect partName client = do
-    let part = Partition (DatabaseURL $ client ^. url) partName
-    PgConnection part <$> liftIO
-      (poolFromUrl (part ^. dbUrl) (fromIntegral $ client ^. maxPoolSize))
+  connect partName client = PgConnection part <$> liftIO
+    (poolFromUrl (part ^. dbUrl) (fromIntegral $ client ^. maxPoolSize))
+    where
+      part = Partition (DatabaseURL $ client ^. url) partName
 
 _proof :: PartitionConnection PgConnection m e => Proxy (m e)
 _proof = Proxy
@@ -118,12 +118,12 @@ instance (EventData a, MonadResource m)
            <> " RETURNING event_number"
 
 instance MonadBaseControl IO m => CanRangeStream PgConnection m e where
-  rangeStream :: (EventData e, MonadResource m, MonadBaseControl IO m)
-              => PgConnection e
-              -> BatchSize
-              -> StreamSource
-              -> (EventNumber, EventNumber)
-              -> m (Stream (Of (Event e)) m ())
+  -- rangeStream :: (EventData e, MonadResource m, MonadBaseControl IO m)
+  --             => PgConnection e
+  --             -> BatchSize
+  --             -> StreamSource
+  --             -> (EventNumber, EventNumber)
+  --             -> m (Stream (Of (Event e)) m ())
   rangeStream conn batchSize source range =
     withResource (conn ^. pool) $ \dbConn -> do
       let wrappedConn = WrappedConnection (conn ^. partition) dbConn

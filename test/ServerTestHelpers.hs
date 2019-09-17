@@ -1,27 +1,31 @@
 {-# LANGUAGE DeriveDataTypeable            #-}
 {-# LANGUAGE DeriveGeneric                 #-}
 {-# LANGUAGE FlexibleContexts              #-}
-{-# LANGUAGE MonoLocalBinds                #-}
-{-# LANGUAGE MultiParamTypeClasses         #-}
 {-# LANGUAGE NoImplicitPrelude             #-}
 {-# LANGUAGE OverloadedStrings             #-}
 {-# LANGUAGE QuasiQuotes                   #-}
 {-# LANGUAGE ScopedTypeVariables           #-}
+{-# LANGUAGE TypeFamilies                  #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module ServerTestHelpers where
 
 import Dispenser.Server.Prelude
 
-import Data.Set                               ( fromList )
-import Data.String                            ( fromString )
-import Data.Text                              ( unpack )
-import Database.PostgreSQL.Simple       as PG
-import Database.PostgreSQL.Simple.SqlQQ
-import Database.PostgreSQL.Simple.URL
-import Dispenser                        as D
-import Dispenser.Server.Partition
-import System.Random
+import Data.Set                                ( fromList )
+import Data.String                             ( fromString )
+import Data.Text                               ( unpack )
+import Database.PostgreSQL.Simple        as PG
+import Database.PostgreSQL.Simple.SqlQQ        ( sql )
+import Database.PostgreSQL.Simple.URL          ( parseDatabaseUrl )
+import Dispenser                         as D
+import Dispenser.Server.Partition              ( PgClient
+                                               , PgConnection
+                                               , new
+                                               , recreate
+                                               )
+import Dispenser.Server.ResourceTOrphans       ()
+import System.Random                           ( randomRIO )
 
 newtype TestInt = TestInt Int
   deriving (Data, Eq, Generic, Ord, Read, Show)
@@ -29,8 +33,6 @@ newtype TestInt = TestInt Int
 instance FromJSON  TestInt
 instance ToJSON    TestInt
 instance EventData TestInt
-
--- instance PartitionConnection PgConnection TestInt where
 
 _proof :: PartitionConnection PgConnection m TestInt => Proxy (m TestInt)
 _proof = Proxy

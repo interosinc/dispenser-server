@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -72,6 +73,7 @@ spec = describe "FromEventNumber" $ do
 
 makeTestStream :: ( MonadIO m
                   , MonadResource m
+                  , MonadBaseControl IO m
                   )
                => BatchSize -> Int
                -> m (PgConnection TestInt, Stream (Of (Event TestInt)) m r)
