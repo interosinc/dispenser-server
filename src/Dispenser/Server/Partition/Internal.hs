@@ -33,8 +33,9 @@ import           Data.Text                                                 ( int
                                                                            , pack
                                                                            , unpack
                                                                            )
-import           Database.PostgreSQL.Simple                                ( query_ )
-import           Database.PostgreSQL.Simple                                ( Connection )
+import           Database.PostgreSQL.Simple                                ( Connection
+                                                                           , query_
+                                                                           )
 import           Database.PostgreSQL.Simple.Notification
 import           Dispenser                                                 ( StreamSource
                                                                            , connect
@@ -68,14 +69,14 @@ makeFields ''PgConnection
 new :: Word -> Text -> IO (PgClient a)
 new = (return .) . PgClient
 
-instance (EventData e, MonadResource m) => Client (PgClient e) m PgConnection e where
+instance (EventData e, MonadResource m) => Client (PgClient e) PgConnection m e where
   connect :: PartitionName -> PgClient e -> m (PgConnection e)
   connect partName client = do
     let part = Partition (DatabaseURL $ client ^. url) partName
     PgConnection part <$> liftIO
       (poolFromUrl (part ^. dbUrl) (fromIntegral $ client ^. maxPoolSize))
 
-_proof :: PartitionConnection m PgConnection e => Proxy (m e)
+_proof :: PartitionConnection PgConnection m e => Proxy (m e)
 _proof = Proxy
 
 instance HasPartition (PgConnection e) where
@@ -85,55 +86,26 @@ newtype PushEvent a = PushEvent { unEvent :: Event a }
   deriving (Eq, Ord, Read, Show)
 
 -- -- TODO: `Foldable a` instead of `[a]`?
--- instance CanAppendEvents PgConnection a where
---   appendEvents :: (EventData e, MonadResource m)
---                => PgConnection e -> Set StreamName -> NonEmptyBatch e
---                -> m EventNumber
---   appendEvents conn streamNames (NonEmptyBatch b) =
---     liftIO . withResource (conn ^. pool) $ \dbConn ->
---       List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
---     where
---       f :: Value -> (Value, Set StreamName)
---       f v = (v, streamNames)
 
---       q :: Query
---       q = fromString . unpack
---             $ "INSERT INTO " <> unPartitionName (conn ^. partitionName)
---            <> " (event_data, stream_names)"
---            <> " VALUES (?, ?)"
---            <> " RETURNING event_number"
-
--- TODO: Figure out how to call appendEvents on WrappedConnection from
--- appendEvents for PgConnection
-
--- TODO: `Foldable a` instead of `[a]`?
-instance (EventData a, MonadResource m) => CanAppendEvents m PgConnection a where
+instance (EventData a, MonadResource m)
+  => CanAppendEvents PgConnection m a where
   appendEvents :: (EventData e, MonadResource m)
                => PgConnection e -> Set StreamName -> NonEmptyBatch e
                -> m EventNumber
-  appendEvents conn streamNames (NonEmptyBatch b) = do
-    let g :: Connection -> IO EventNumber
-        g dbc = List.last <$> returning dbc q (fmap f $ toJSON <$> toList b)
-    liftIO . withResource (conn ^. pool) $ g
-    where
-      f :: Value -> (Value, Set StreamName)
-      f v = (v, streamNames)
+  appendEvents conn streamNames batch =
+    liftIO . withResource (conn ^. pool) $ \dbConn -> do
+      let wrappedConn = WrappedConnection (conn ^. partition) dbConn
+      runResourceT $ appendEvents wrappedConn streamNames batch
 
-      q :: Query
-      q = fromString . unpack
-            $ "INSERT INTO " <> unPartitionName (conn ^. partitionName)
-           <> " (event_data, stream_names)"
-           <> " VALUES (?, ?)"
-           <> " RETURNING event_number"
-
-instance (EventData a, MonadResource m) => CanAppendEvents m WrappedConnection a where
+instance (EventData a, MonadResource m)
+  => CanAppendEvents WrappedConnection m a where
   appendEvents :: (EventData e, MonadIO m)
                => WrappedConnection e
                -> Set StreamName
                -> NonEmptyBatch e
                -> m EventNumber
-  appendEvents (WrappedConnection part dbConn) streamNames (NonEmptyBatch b) = liftIO $ do
-    List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
+  appendEvents (WrappedConnection part dbConn) streamNames (NonEmptyBatch b) =
+    liftIO $ List.last <$> returning dbConn q (fmap f $ toJSON <$> toList b)
     where
       f :: Value -> (Value, Set StreamName)
       f v = (v, streamNames)
@@ -145,9 +117,12 @@ instance (EventData a, MonadResource m) => CanAppendEvents m WrappedConnection a
            <> " VALUES (?, ?)"
            <> " RETURNING event_number"
 
-instance CanRangeStream m PgConnection e where
+instance CanRangeStream PgConnection m e where
   rangeStream :: (EventData e, MonadIO m, MonadResource m)
-              => PgConnection e -> BatchSize -> StreamSource -> (EventNumber, EventNumber)
+              => PgConnection e
+              -> BatchSize
+              -> StreamSource
+              -> (EventNumber, EventNumber)
               -> m (Stream (Of (Event e)) m ())
   rangeStream conn batchSize source (minNum, maxNum)
     | maxNum < minNum        = do
@@ -191,7 +166,7 @@ instance CanRangeStream m PgConnection e where
         <> " -- "
         <> show msg
 
-instance CanFromNow m PgConnection e where
+instance CanFromNow PgConnection m e where
   fromNow :: ( EventData e
              , MonadResource m
              )
@@ -228,7 +203,7 @@ instance CanFromNow m PgConnection e where
       deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
       deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
 
-instance CanFromEventNumber m PgConnection e where
+instance CanFromEventNumber PgConnection m e where
   fromEventNumber = genericFromEventNumber
 
 exists :: PgConnection a -> IO Bool
@@ -291,7 +266,7 @@ create conn = withResource (conn ^. pool) $ \dbConn -> do
       where
         triggerName = table <> "_stream_trig"
 
-instance CanCurrentEventNumber m PgConnection e where
+instance CanCurrentEventNumber PgConnection m e where
   currentEventNumber conn = liftIO . withResource (conn ^. pool) $ \dbConn -> do
     [Only n] <- query_ dbConn q
     return $ EventNumber n
@@ -317,7 +292,10 @@ partitionNameToChannelName = (<> "_stream")
 -- Right now there is no limit on batch size... so obviously we should uh... do
 -- something about that.
 pgReadBatchFrom :: EventData a
-                => EventNumber -> BatchSize -> StreamSource -> PgConnection a
+                => EventNumber
+                -> BatchSize
+                -> StreamSource
+                -> PgConnection a
                 -> IO (Async (Batch (Event a)))
 pgReadBatchFrom (EventNumber n) (BatchSize sz) source conn
   | sz <= 0   = async (return $ Batch [])
@@ -376,13 +354,15 @@ instance FromJSON a => FromJSON (PushEvent a) where
         Nothing -> fail $ "no '" <> unpack s <> "' field"
 
 takeConnection :: MonadResource m
-               => PgConnection e -> m Connection
+               => PgConnection e
+               -> m Connection
 takeConnection conn = do
   (dbConn, _localPool) <- takeConnectionLP conn
   return dbConn
 
 takeConnectionLP :: MonadResource m
-                 => PgConnection e -> m (Connection, LocalPool Connection)
+                 => PgConnection e
+                 -> m (Connection, LocalPool Connection)
 takeConnectionLP conn = do
   (_key, x) <- allocate take' release'
   return x

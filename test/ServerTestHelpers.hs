@@ -32,7 +32,7 @@ instance EventData TestInt
 
 -- instance PartitionConnection PgConnection TestInt where
 
-_proof :: PartitionConnection m PgConnection TestInt => Proxy (m TestInt)
+_proof :: PartitionConnection PgConnection m TestInt => Proxy (m TestInt)
 _proof = Proxy
 
 createTestPartition :: MonadIO m => m (PgConnection TestInt)

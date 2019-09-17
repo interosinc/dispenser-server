@@ -2,11 +2,9 @@ resolver: lts-12.11
 
 packages:
 - location: .
-# - location: ../dispenser-core
-#   extra-dep: true
 - location:
-    git: git@github.com:SuperpowersCorp/dispenser-core.git
-    commit: 60f681ea42e4a460759126c6b993f1a6c9ffeb63
+    git: git@github.com:interosinc/dispenser-core.git
+    commit: c8a0a9d9b3e2e7251599df8678c08afc667d6cfd
   extra-dep: true
 
 extra-deps:
