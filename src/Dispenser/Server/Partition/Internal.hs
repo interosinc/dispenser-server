@@ -119,7 +119,54 @@ instance (EventData a, MonadResource m)
 
 instance CanRangeStream PgConnection m e where
   rangeStream :: (EventData e, MonadIO m, MonadResource m)
-              => PgConnection e
+              => PgConnection e -> BatchSize -> StreamSource -> (EventNumber, EventNumber)
+              -> m (Stream (Of (Event e)) m ())
+  rangeStream conn batchSize source (minNum, maxNum)
+    | maxNum < minNum        = do
+        debugRangeStream source (minNum, maxNum) "maxNum < minNum"
+        return mempty
+    | maxNum < EventNumber 0 = do
+        debugRangeStream source (minNum, maxNum) "max EventNumber < 0"
+        return mempty
+    | otherwise = do
+        debugRangeStream source (minNum, maxNum) "otherwise"
+        batch :: Batch (Event a) <- liftIO $ wait
+          =<< pgReadBatchFrom minNum batchSize source conn
+        let events      = unBatch batch
+            batchStream = S.each events
+        if any ((>= maxNum) . view eventNumber) events
+            || (length events < (fromIntegral . unBatchSize) batchSize)
+            -- TODO: is this right?  I added it to prevent tests hanging that
+            --       started when I actually implemented filtering based on
+            --       StreamSource but I'm not sure if philosophically
+            --       rangeStream should block until the event stream catches up
+            --       to the end of the range or not.  maybe it should or maybe
+            --       there should be both blocking and non-blocking interfaces.
+            --       either way for now I'm taking the coward's way out since
+            --       this fixes the tests.
+
+            -- TODO: If nothing else it seems like it could miss an event if it
+            --       reads short but new events come in before it switches over
+            --       to LISTEN
+          then return $ S.takeWhile ((<= maxNum) . view eventNumber) batchStream
+          else do
+            let minNum' = succ . fromMaybe (EventNumber (-1))
+                  . maximumMay . map (view eventNumber) $ events
+            nextStream <- rangeStream conn batchSize source (minNum', maxNum)
+            return $ batchStream >>= const nextStream
+    where
+      debugRangeStream :: MonadIO m
+                       => StreamSource -> (EventNumber, EventNumber) -> String -> m ()
+      debugRangeStream source' range msg = debug $ "debugRangeStream: source="
+        <> show source'
+        <> " "
+        <> show range
+        <> " -- "
+        <> show msg
+
+instance CanRangeStream WrappedConnection m e where
+  rangeStream :: (EventData e, MonadIO m, MonadResource m)
+              => WrappedConnection e
               -> BatchSize
               -> StreamSource
               -> (EventNumber, EventNumber)
@@ -134,7 +181,7 @@ instance CanRangeStream PgConnection m e where
     | otherwise = do
         debugRangeStream source (minNum, maxNum) "otherwise"
         batch :: Batch (Event a) <- liftIO $ wait
-          =<< pgReadBatchFrom minNum batchSize source conn
+          =<< wpgReadBatchFrom minNum batchSize source conn
         let events      = unBatch batch
             batchStream = S.each events
         if any ((>= maxNum) . view eventNumber) events
@@ -274,6 +321,15 @@ instance CanCurrentEventNumber PgConnection m e where
       q = fromString . unpack $ "SELECT COALESCE(MAX(event_number), -1) FROM " <> tn
       PartitionName tn = conn ^. partitionName
 
+-- TODO: DRY
+instance CanCurrentEventNumber WrappedConnection m e where
+  currentEventNumber (WrappedConnection part dbConn) = liftIO $ do
+    [Only n] <- query_ dbConn q
+    return $ EventNumber n
+    where
+      q = fromString . unpack $ "SELECT COALESCE(MAX(event_number), -1) FROM " <> tn
+      PartitionName tn = part ^. partitionName
+
 drop :: PgConnection a -> IO ()
 drop partConn = withResource (partConn ^. pool) $ \conn -> do
   runSQL conn $ "DROP TABLE IF EXISTS " <> table
@@ -288,6 +344,8 @@ recreate conn = do
 
 partitionNameToChannelName :: Text -> Text
 partitionNameToChannelName = (<> "_stream")
+
+-- TODO: Dry up vs wpgReadBatchFrom
 
 -- Right now there is no limit on batch size... so obviously we should uh... do
 -- something about that.
@@ -319,6 +377,53 @@ pgReadBatchFrom (EventNumber n) (BatchSize sz) source conn
     q = fromString . unpack
           $ "SELECT event_number, stream_names, event_data, recorded_at"
          <> " FROM " <> unPartitionName (conn ^. partitionName)
+         <> " WHERE event_number >= ?"
+         <> streamSourceClause
+         <> " ORDER BY event_number"
+         <> " LIMIT ?"
+
+    params :: (Int, Int)
+    params = bimap fromIntegral fromIntegral (n, sz)
+
+    streamSourceClause = maybe "" (" AND stream_names && " <>) (streamArray source)
+
+    streamArray :: StreamSource -> Maybe Text
+    streamArray AllStreams       = Nothing
+    streamArray (SomeStreams ss) = Just
+      . ("'{" <>) . (<> "}'")
+      . intercalate ","
+      . map (show . unStreamName)
+      . toList
+      $ ss
+
+wpgReadBatchFrom :: EventData a
+                 => EventNumber
+                 -> BatchSize
+                 -> StreamSource
+                 -> WrappedConnection a
+                 -> IO (Async (Batch (Event a)))
+wpgReadBatchFrom (EventNumber n) (BatchSize sz) source (WrappedConnection part dbConn)
+  | sz <= 0   = async (return $ Batch [])
+  | otherwise = async $ do
+      -- debug $ "streamSourceClause: " <> show streamSourceClause
+      -- debug $ "q: " <> show q
+      -- debug $ "params: " <> show params
+      batchValue :: Batch (Event Value) <- Batch <$> query dbConn q params
+      -- debug $ "result: " <> show batchValue
+      return $ f batchValue
+  where
+    f :: EventData a => Batch (Event Value) -> Batch (Event a)
+    f = fmap (g . fromJSON <$>)
+
+    g :: Result a -> a
+    g = \case
+      Error e   -> panic $ "unexpected error deserializing result: " <> show e
+      Success x -> x
+
+    q :: Query
+    q = fromString . unpack
+          $ "SELECT event_number, stream_names, event_data, recorded_at"
+         <> " FROM " <> unPartitionName (part ^. partitionName)
          <> " WHERE event_number >= ?"
          <> streamSourceClause
          <> " ORDER BY event_number"
