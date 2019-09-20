@@ -28,11 +28,10 @@ import Dispenser.Server.ResourceTOrphans       ()
 import System.Random                           ( randomRIO )
 
 newtype TestInt = TestInt Int
-  deriving (Data, Eq, Generic, Ord, Read, Show)
+  deriving (Eq, Generic, Ord, Read, Show)
 
-instance FromJSON  TestInt
-instance ToJSON    TestInt
-instance EventData TestInt
+instance FromJSON TestInt
+instance ToJSON   TestInt
 
 _proof :: PartitionConnection PgConnection m TestInt => Proxy (m TestInt)
 _proof = Proxy
