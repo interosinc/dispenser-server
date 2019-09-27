@@ -178,21 +178,24 @@ instance CanRangeStream WrappedConnection m e where
         <> " -- "
         <> show msg
 
-instance CanFromNow PgConnection m e where
+instance (MonadBaseControl IO m) => CanFromNow PgConnection m a where
+  fromNow :: forall r. (EventData a, MonadResource m)
+          => PgConnection a
+          -> BatchSize
+          -> StreamSource
+          -> m (Stream (Of (Event a)) m r)
+  fromNow conn batchSize source = withResource (conn ^. pool) $ \dbConn -> do
+    let wrappedConn = WrappedConnection (conn ^. partition) dbConn
+    fromNow wrappedConn batchSize source
+
+instance CanFromNow WrappedConnection m e where
   fromNow :: ( EventData e
              , MonadResource m
              )
-          => PgConnection e -> BatchSize -> StreamSource
+          => WrappedConnection e -> BatchSize -> StreamSource
           -> m (Stream (Of (Event e)) m r)
-  fromNow conn batchSize _source = do
-    -- TODO: filter by source
-
+  fromNow (WrappedConnection part dbConn) batchSize _source = do
     debug $ "Dispenser.Server.Partition: fromNow, batchSize=" <> show batchSize
-    -- TODO: This will leak connections if an exception occurs.
-    --       conn should be destroyed or returned
-
-    dbConn <- takeConnection conn
-
     debug $ "Listening for notifications on: " <> show channelText
     void . liftIO . execute_ dbConn . fromString . unpack $ "LISTEN " <> channelText
     debug "pushStream acquired connection"
@@ -210,7 +213,7 @@ instance CanFromNow PgConnection m e where
     where
       channelBytes = encodeUtf8 channelText
       channelText  = partitionNameToChannelName . unPartitionName
-        $ conn ^. partitionName
+        $ part ^. partitionName
 
       deserializeNotificationEvent :: EventData a => ByteString -> Either Text (Event a)
       deserializeNotificationEvent = bimap pack unEvent . eitherDecode . Lazy.fromStrict
