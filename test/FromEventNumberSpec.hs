@@ -9,7 +9,6 @@ module FromEventNumberSpec where
 import           Dispenser.Server.Prelude
 import qualified Streaming.Prelude          as S
 
-import           Data.Set                   as Set
 import           Dispenser
 import           Dispenser.Server.Partition
 import           ServerTestHelpers
@@ -81,6 +80,3 @@ makeTestStream batchSize n = do
   conn <- createTestPartition
   mapM_ (postTestEvent conn) [1..n]
   (conn,) <$> fromOne conn batchSize testStreamSource
-
-testStreamSource :: StreamSource
-testStreamSource = SomeStreams . Set.fromList . return . StreamName $ "test"

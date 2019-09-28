@@ -12,20 +12,21 @@ module ServerTestHelpers where
 
 import Dispenser.Server.Prelude
 
-import Data.Set                                ( fromList )
-import Data.String                             ( fromString )
-import Data.Text                               ( unpack )
+import Data.Set                          as Set
+import Data.Set                                 ( fromList )
+import Data.String                              ( fromString )
+import Data.Text                                ( unpack )
 import Database.PostgreSQL.Simple        as PG
-import Database.PostgreSQL.Simple.SqlQQ        ( sql )
-import Database.PostgreSQL.Simple.URL          ( parseDatabaseUrl )
+import Database.PostgreSQL.Simple.SqlQQ         ( sql )
+import Database.PostgreSQL.Simple.URL           ( parseDatabaseUrl )
 import Dispenser                         as D
-import Dispenser.Server.Partition              ( PgClient
-                                               , PgConnection
-                                               , new
-                                               , recreate
-                                               )
-import Dispenser.Server.ResourceTOrphans       ()
-import System.Random                           ( randomRIO )
+import Dispenser.Server.Partition               ( PgClient
+                                                , PgConnection
+                                                , new
+                                                , recreate
+                                                )
+import Dispenser.Server.ResourceTOrphans        ()
+import System.Random                            ( randomRIO )
 
 newtype TestInt = TestInt Int
   deriving (Eq, Generic, Ord, Read, Show)
@@ -56,7 +57,7 @@ deleteAllTestPartitions = case parseDatabaseUrl . unpack $ url' of
   Nothing -> panic $ "invalid database URL: " <> show url'
   Just connectInfo -> do
     conn <- PG.connect connectInfo
-    tableNames :: [Text] <- map fromOnly <$> query_ conn q
+    tableNames :: [Text] <- fromOnly <<$>> query_ conn q
     mapM_ (deleteTable conn) tableNames
     putLn $ "Removed " <> show (length tableNames) <> " partitions."
   where
@@ -79,3 +80,6 @@ postTestEvent conn = void
   . runResourceT
   . postEvent conn (fromList [StreamName "test"])
   . TestInt
+
+testStreamSource :: StreamSource
+testStreamSource = SomeStreams . Set.fromList . return . StreamName $ "test"
