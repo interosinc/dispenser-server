@@ -1,3 +1,3 @@
 # dispenser-server
 
-Postgresql based backend for [dispenser-core](SuperpowersCorp/dispenser-core).
+Postgresql based backend for [dispenser-core](interosinc/dispenser-core).
