@@ -4,7 +4,7 @@ packages:
 - location: .
 - location:
     git: git@github.com:interosinc/dispenser-core.git
-    commit: 4ee49c45618d2b64e788b43a5f5d9512e5750302
+    commit: 6fe85379b1bb5fec6cf64488e1bf1183bec393bc
   extra-dep: true
 
 extra-deps:

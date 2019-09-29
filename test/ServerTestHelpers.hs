@@ -12,21 +12,21 @@ module ServerTestHelpers where
 
 import Dispenser.Server.Prelude
 
-import Data.Set                          as Set
-import Data.Set                                 ( fromList )
-import Data.String                              ( fromString )
-import Data.Text                                ( unpack )
-import Database.PostgreSQL.Simple        as PG
-import Database.PostgreSQL.Simple.SqlQQ         ( sql )
-import Database.PostgreSQL.Simple.URL           ( parseDatabaseUrl )
-import Dispenser                         as D
-import Dispenser.Server.Partition               ( PgClient
-                                                , PgConnection
-                                                , new
-                                                , recreate
-                                                )
-import Dispenser.Server.ResourceTOrphans        ()
-import System.Random                            ( randomRIO )
+import Data.Set                         as Set
+import Data.Set                                ( fromList )
+import Data.String                             ( fromString )
+import Data.Text                               ( unpack )
+import Database.PostgreSQL.Simple       as PG
+import Database.PostgreSQL.Simple.SqlQQ        ( sql )
+import Database.PostgreSQL.Simple.URL          ( parseDatabaseUrl )
+import Dispenser                        as D
+import Dispenser.ResourceTOrphans              ()
+import Dispenser.Server.Partition              ( PgClient
+                                               , PgConnection
+                                               , new
+                                               , recreate
+                                               )
+import System.Random                           ( randomRIO )
 
 newtype TestInt = TestInt Int
   deriving (Eq, Generic, Ord, Read, Show)
