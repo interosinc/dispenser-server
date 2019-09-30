@@ -46,10 +46,11 @@ library:
   - -Wincomplete-record-updates
   - -Wincomplete-uni-patterns
   - -Wredundant-constraints
+#  - -Wmissing-import-lists
 
 tests:
   dispenser-server-test:
-    main:                Spec.hs
+    main:                Driver.hs
     source-dirs:         test
     ghc-options:
     - -threaded
@@ -59,7 +60,10 @@ tests:
     - -Wincomplete-record-updates
     - -Wincomplete-uni-patterns
     - -Wredundant-constraints
+#    - -Wmissing-import-lists
     dependencies:
-    - QuickCheck
     - dispenser-server
-    - hspec
+    - dispenser-tests
+    - tasty
+    - tasty-discover
+    - tasty-hspec

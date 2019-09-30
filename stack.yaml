@@ -6,6 +6,8 @@ packages:
     git: git@github.com:interosinc/dispenser-core.git
     commit: 6fe85379b1bb5fec6cf64488e1bf1183bec393bc
   extra-dep: true
+- location: ../dispenser-tests
+  extra-dep: true
 
 extra-deps:
 - monad-io-adapter-0.1.0.0
