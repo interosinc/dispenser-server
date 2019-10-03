@@ -7,17 +7,17 @@ module StandardTest where
 import Dispenser.Prelude
 
 import Control.Monad.Trans.Resource ( ResourceT )
-import Dispenser                    ( PartitionName( PartitionName )
-                                    , connect
-                                    )
 import Dispenser.ResourceTOrphans   ()
 import Dispenser.Server             ( PgClient
                                     , PgConnection
+                                    , connect
+                                    , ensureExists
                                     , new
                                     )
 import Dispenser.Tests              ( TestConfig( TestConfig )
                                     , TestEvent
                                     , partitionConnectionSpecFrom
+                                    , randomPartitionName
                                     )
 import Test.Tasty.Hspec             ( Spec
                                     , runIO
@@ -36,6 +36,7 @@ spec_standard = join . runIO . runResourceT $
           let poolMax = 5
               url = "postgres://dispenser:dispenser@localhost:5432/dispenser"
           client :: PgClient TestEvent <- liftIO $ new poolMax url
-          connect (PartitionName "randomize-me") client
-
-
+          partName <- liftIO randomPartitionName
+          conn <- connect partName client
+          liftIO $ ensureExists conn
+          pure conn
