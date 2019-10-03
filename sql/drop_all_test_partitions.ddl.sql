@@ -12,7 +12,6 @@ DECLARE
   t TEXT;
 BEGIN
   FOR t IN tables LOOP
-    -- EXECUTE 'DROP TABLE ' || QUOTE_IDENT(t :: TEXT);
     EXECUTE format('DROP TABLE %1$I'
            , TRIM(LEADING '('
                   FROM ( TRIM(TRAILING ')'
