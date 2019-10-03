@@ -10,5 +10,4 @@ packages:
   extra-dep: true
 
 extra-deps:
-- monad-io-adapter-0.1.0.0
-- protolude-0.2.2
+- monad-io-adapter-0.1.0.0@sha256:54b74abb735faf7ab2001befe47ab25ca9cec0e74c856cb44fea44ef326ad517
