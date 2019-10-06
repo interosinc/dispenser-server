@@ -7,6 +7,7 @@ module StandardTest where
 import Dispenser.Prelude
 
 import Control.Monad.Trans.Resource ( ResourceT )
+import Data.Text                    ( pack )
 import Dispenser.ResourceTOrphans   ()
 import Dispenser.Server             ( PgClient
                                     , PgConnection
@@ -19,24 +20,34 @@ import Dispenser.Tests              ( TestConfig( TestConfig )
                                     , partitionConnectionSpecFrom
                                     , randomPartitionName
                                     )
+import System.Environment           ( lookupEnv )
 import Test.Tasty.Hspec             ( Spec
                                     , runIO
                                     )
 
 spec_standard :: Spec
-spec_standard = join . runIO . runResourceT $
-  partitionConnectionSpecFrom testCfg "PgClient"
+spec_standard = join . runIO $ do
+  url <- fromMaybe defaultUrl
+           <$> (pack <<$>> lookupEnv "DISPENSER_TEST_POSTGRES_URL")
+  poolMaxMay <- lookupEnv "DISPENSER_TEST_POSTGRES_POOL_MAX"
+  let poolMax = maybe defaultPoolMax
+                  (fromMaybe (panic $ "invalid DISPENSER_TEST_POSTGRES_POOL_MAX: ")
+                   . readMaybe)
+                  poolMaxMay
+  client :: PgClient TestEvent <- liftIO $ new poolMax url
+  runResourceT $
+    partitionConnectionSpecFrom (mkTestCfg client) "PgClient"
   where
-    testCfg :: TestConfig (PgClient TestEvent) PgConnection
-    testCfg = TestConfig makeConn
+    mkTestCfg :: PgClient TestEvent
+            -> TestConfig (PgClient TestEvent) PgConnection
+    mkTestCfg client = TestConfig makeConn
       where
         makeConn :: ResourceT IO (PgConnection TestEvent)
         makeConn = do
-          -- TODO: env vars
-          let poolMax = 5
-              url = "postgres://dispenser:dispenser@localhost:5432/dispenser"
-          client :: PgClient TestEvent <- liftIO $ new poolMax url
           partName <- liftIO randomPartitionName
           conn <- connect partName client
           liftIO $ ensureExists conn
           pure conn
+
+    defaultUrl = "postgres://dispenser:dispenser@localhost:5432/dispenser"
+    defaultPoolMax = 5
