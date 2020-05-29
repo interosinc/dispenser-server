@@ -1,0 +1,104 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 74ff37015289f7f25be031427653eff887cf3b72fb55c83a71dca334ef981280
+
+name:           dispenser-server
+version:        0.2.0.0
+synopsis:       PostgreSQL implementation of Dispenser event sourcing.
+description:    README at <https://github.com/interosinc/dispenser-server#readme>
+category:       Database
+homepage:       https://github.com/interosinc/dispenser-server#readme
+bug-reports:    https://github.com/interosinc/dispenser-server/issues
+author:         John Evans
+maintainer:     jevans@interos.net
+copyright:      2018 Superpowers Corp, 2019 Interos, Inc
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/interosinc/dispenser-server
+
+library
+  exposed-modules:
+      Dispenser.Server
+      Dispenser.Server.Db
+      Dispenser.Server.Orphans
+      Dispenser.Server.Partition
+      Dispenser.Server.Partition.Internal
+      Dispenser.Server.Prelude
+      Dispenser.Server.ResourceTOrphans
+  other-modules:
+      Paths_dispenser_server
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  build-depends:
+      aeson
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , data-default
+    , dispenser-core
+    , foldl
+    , lens
+    , monad-control
+    , monad-io-adapter
+    , postgresql-simple
+    , postgresql-simple-url
+    , random
+    , resource-pool
+    , resourcet
+    , stm
+    , streaming
+    , text
+    , time
+    , transformers-base
+    , unordered-containers
+  default-language: Haskell2010
+
+test-suite dispenser-server-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      EventStreamSpec
+      FromEventNumberSpec
+      ServerTestHelpers
+      Paths_dispenser_server
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  build-depends:
+      QuickCheck
+    , aeson
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , data-default
+    , dispenser-core
+    , dispenser-server
+    , foldl
+    , hspec
+    , lens
+    , monad-control
+    , monad-io-adapter
+    , postgresql-simple
+    , postgresql-simple-url
+    , random
+    , resource-pool
+    , resourcet
+    , stm
+    , streaming
+    , text
+    , time
+    , transformers-base
+    , unordered-containers
+  default-language: Haskell2010

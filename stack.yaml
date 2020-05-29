@@ -1,12 +1,10 @@
 resolver: lts-12.11
 
 packages:
-- location: .
-- location:
-    git: git@github.com:interosinc/dispenser-core.git
-    commit: 4ee49c45618d2b64e788b43a5f5d9512e5750302
-  extra-dep: true
+- .
 
 extra-deps:
 - monad-io-adapter-0.1.0.0
 - protolude-0.2.2
+- git: git@github.com:interosinc/dispenser-core.git
+  commit: 4ee49c45618d2b64e788b43a5f5d9512e5750302
